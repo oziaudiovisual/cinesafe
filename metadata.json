@@ -1,0 +1,7 @@
+{
+  "name": "Cine Safe Ajuste Manus",
+  "description": "Cine Safe: Segurança no Audiovisual. Uma plataforma completa para profissionais do audiovisual gerenciarem inventário, reportar roubos com geolocalização, verificar números de série e alugar equipamentos.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
