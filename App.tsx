@@ -1,6 +1,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { Layout } from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -31,9 +32,9 @@ const PageLoader = () => (
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ children, adminOnly = false }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) return <PageLoader />;
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -41,7 +42,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
   if (adminOnly && user.role !== 'admin') {
     return <Navigate to="/" replace />;
   }
-  
+
   return <Layout>{children}</Layout>;
 };
 
@@ -67,12 +68,13 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
-            
+
             {/* Admin Route */}
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />
           </Routes>
         </Suspense>
       </HashRouter>
+      <Analytics />
     </AuthProvider>
   );
 }
