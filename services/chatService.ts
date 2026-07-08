@@ -43,8 +43,8 @@ export const chatService = {
         id,
         participants: [me.id, other.id],
         participantInfo: {
-          [me.id]: { name: me.name, avatarUrl: me.avatarUrl },
-          [other.id]: { name: other.name, avatarUrl: other.avatarUrl },
+          [me.id]: { name: me.name || 'Usuário', avatarUrl: me.avatarUrl || '' },
+          [other.id]: { name: other.name || 'Usuário', avatarUrl: other.avatarUrl || '' },
         },
         lastMessage: '',
         lastMessageAt: now,

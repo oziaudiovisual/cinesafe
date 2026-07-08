@@ -93,7 +93,9 @@ service cloud.firestore {
 
     // ---- CHATS ---- (mensagens internas: só os participantes acessam)
     match /chats/{chatId} {
-      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      // resource == null permite o getDoc numa conversa que ainda não existe
+      // (ao abrir o chat pela primeira vez), sem vazar nada.
+      allow read: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants);
       allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants;
       allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
 

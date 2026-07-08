@@ -29,8 +29,14 @@ export const notificationService = {
 
   createNotification: async (notification: Notification) => {
     try {
-        await setDoc(doc(db, 'notifications', notification.id), notification);
-        
+        // Remove campos undefined (ex.: fromUserPhone quando o remetente ainda não
+        // preencheu o telefone). O Firestore rejeita o doc inteiro se houver undefined,
+        // o que fazia a notificação nunca ser criada.
+        const clean = Object.fromEntries(
+            Object.entries(notification).filter(([, v]) => v !== undefined)
+        ) as Notification;
+        await setDoc(doc(db, 'notifications', notification.id), clean);
+
         const userRef = doc(db, 'users', notification.toUserId);
         
         let statField = '';
@@ -44,7 +50,10 @@ export const notificationService = {
              });
         }
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error('createNotification error:', e);
+        return false;
+    }
   },
 
   getUserNotifications: async (userId: string): Promise<Notification[]> => {
