@@ -11,7 +11,7 @@ interface AuthContextType {
   register: (e: string, p: string, n: string, l: string, r?: string) => Promise<string | undefined>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  loginWithGoogle: () => void;
+  loginWithGoogle: () => Promise<string | undefined>;
 }
 
 const AuthContext = createContext<AuthContextType>(null!);

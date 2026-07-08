@@ -13,6 +13,7 @@ Esta página documenta apenas os componentes compartilhados no diretório `compo
 | `ConfirmModal` | `components/ConfirmModal.tsx` | Modal genérico | Sim | Sim | Confirmação de ação (normal ou destrutiva) |
 | `ContractModal` | `components/ContractModal.tsx` | Modal de formulário | Não | Sim | Proposta de contrato (aluguel/venda) a partir do chat |
 | `ReferralModal` | `components/ReferralModal.tsx` | Modal de upsell | Não | Sim | Paywall de indicações (freemium) e convite |
+| `LocationGateModal` | `components/LocationGateModal.tsx` | Modal bloqueante | Não | Sim | Gate obrigatório de cidade/estado para usuários OAuth sem localização |
 | `UserAvatar` | `components/UserAvatar.tsx` | Apresentação | Sim | Não | Avatar com fallback de iniciais quando não há foto |
 | `CineSafeLogo` | `components/CineSafeLogo.tsx` | Apresentação | Sim | Não | Logotipo (`/logo.webp`) |
 | `CineGuardLogo` | `components/CineGuardLogo.tsx` | — | — | — | **Arquivo vazio (0 bytes)** — sem export; ver seção própria |
@@ -184,6 +185,28 @@ Paywall/upsell do modelo freemium: exibido ao atingir um limite do plano gratuit
 ### Uso
 
 Aberto quando uma tela detecta que o limite gratuito foi atingido (a validação de limites acontece no cliente, ver [`../reference/services.md`](./services.md)). Usos: `reason="inventory"` em `pages/Inventory.tsx`; `reason="check"` em `pages/SerialCheck.tsx`; `reason="contact"` em `pages/Rentals.tsx` e `pages/Sales.tsx`; `reason="invite"` em `pages/Home.tsx`.
+
+---
+
+## `LocationGateModal`
+
+Gate **obrigatório e não-dispensável** de localização. Fecha a lacuna do login com Google, que cria o perfil sem cidade/estado (`location: 'Brasil'`, ver [`../05-frontend.md`](../05-frontend.md) §6 e `services/auth.ts`). Portal (`createPortal` → `document.body`, `z-[2000]`). Fonte: `components/LocationGateModal.tsx`.
+
+### Props
+
+Nenhuma. O componente é **auto-suficiente**: lê `user`/`refreshUser` de `useAuth()` e decide sozinho se aparece.
+
+### Comportamento
+
+- **Condição de exibição** (`isLocationMissing`): `!user.location || user.location === 'Brasil' || !user.location.includes(' - ')`. Quando a localização é válida (`"Cidade - UF"`), retorna `null`.
+- **Montagem**: renderizado uma única vez no `Layout` (`components/Layout.tsx`), portanto cobre **todas** as telas autenticadas (`RootRoute`/`Home` e qualquer `ProtectedRoute`).
+- **Bloqueio total**: sem `X`, sem fechar por clique no backdrop, sem `Esc`; trava `document.body.style.overflow` enquanto aberto. A única saída é preencher e confirmar.
+- **Formulário**: selects encadeados Estado → Cidade via `IBGEService` (`getUFs` / `getCitiesByUF`). O botão **"Finalizar acesso"** fica desabilitado até ambos preenchidos e exibe spinner ("Salvando...") durante o save.
+- **Persistência**: grava `location = "Cidade - UF"` com `userService.updateUserProfile(user.id, { location })` e chama `refreshUser()`. Isso atualiza `user.location` → `isLocationMissing` vira `false` → o modal desmonta e o app é liberado. Em falha, exibe erro e permite nova tentativa.
+
+### Uso
+
+Não recebe props nem é aberto manualmente. Basta estar montado no `Layout` — ver `components/Layout.tsx` (`<LocationGateModal />` ao final do container).
 
 ---
 

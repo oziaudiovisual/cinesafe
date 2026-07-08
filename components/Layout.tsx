@@ -3,6 +3,7 @@ import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { Icons } from './Icons';
 import { useAuth } from '../context/AuthContext';
 import { CineSafeLogo } from './CineSafeLogo';
+import { LocationGateModal } from './LocationGateModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -198,6 +199,9 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
             </div>
         </main>
       </div>
+
+      {/* Gate obrigatório de localização (usuários OAuth sem cidade/estado) */}
+      <LocationGateModal />
     </div>
   );
 };

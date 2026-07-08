@@ -233,6 +233,8 @@ Além disso: link **Admin** (`/admin`) renderizado só se `user?.role === 'admin
 
 Conteúdo da página entra em `<main>` (`Layout.tsx:195`) com `max-w-7xl mx-auto`, scroll próprio (`overflow-y-auto`) e orbs de fundo decorativos. Catálogo de componentes reutilizáveis em `reference/components.md`.
 
+O `Layout` também monta `<LocationGateModal />` (React Portal) ao final — o **gate obrigatório de localização** que bloqueia todas as telas autenticadas até o usuário informar cidade/estado (ver §6, "Onboarding").
+
 ---
 
 ## 6. Estado global: `AuthContext` (o único contexto)
@@ -249,6 +251,7 @@ interface AuthContextType {
   register:(e: string, p: string, n: string, l: string, r?: string) => Promise<string | undefined>;
   logout:  () => Promise<void>;
   refreshUser: () => Promise<void>;
+  loginWithGoogle: () => Promise<string | undefined>;
 }
 ```
 
@@ -260,6 +263,7 @@ interface AuthContextType {
 | `register` | Cadastra (email, senha, nome, localização, e `referralCode` opcional). Mesmo contrato de retorno. |
 | `logout` | Encerra sessão no Firebase e zera `user`. |
 | `refreshUser` | Recarrega o perfil via `userService.getUserProfile(user.id)`, disparando o **recálculo de reputação no cliente**. |
+| `loginWithGoogle` | Dispara o OAuth do Google (`AuthService.loginWithGoogle` → `supabase.auth.signInWithOAuth`). Em sucesso o navegador é **redirecionado** para o Google (a Promise normalmente não resolve); em falha resolve para uma `string` de erro para a página exibir. |
 
 ### Ciclo de vida (`AuthContext.tsx:17-72`)
 
@@ -271,6 +275,16 @@ interface AuthContextType {
 `useAuth()` (`AuthContext.tsx:81`) é o hook de acesso: `const { user } = useAuth()`.
 
 Serviços consumidos: `reference/services.md` (`auth.ts`, `userService.ts`). Modelo do `User`: `03-data-model.md`.
+
+### Onboarding: feedback, cadastro e localização
+
+- **Feedback de clique** (`pages/Login.tsx`, `pages/Register.tsx`): todo botão que dispara uma ação assíncrona — `Entrar`/`Criar Conta` (submit) e `Google` — usa estado local (`submitting`, `googleLoading`) para ficar **desabilitado e exibir spinner + rótulo** ("Entrando…", "Criando conta…", "Conectando…") enquanto a requisição/redirect acontece. Isso evita a "tela morta" em que o usuário não sabe se o clique funcionou. O handler do Google (`handleGoogle`) aguarda `loginWithGoogle()`; como o sucesso redireciona o navegador, o loading só é revertido quando há **erro** (mensagem exibida no bloco de erro da página).
+- **Cadastro sem rolagem** (`pages/Register.tsx`): o card é condensado (paddings/spacings menores, inputs `py-3`, logo reduzida) para caber inteiro na viewport — sem `overflow`/scroll interno. Todos os campos (nome, estado/cidade em grade 2 colunas, e-mail, senha) + botões ficam visíveis de uma vez em telas de laptop.
+- **Localização no OAuth — gate obrigatório**: o cadastro por e-mail exige **estado + cidade** (via `IBGEService`, gravados como `"Cidade - UF"`). Já o login com Google **não coleta** localização — `AuthService.getSession` cria o perfil com o placeholder `location: 'Brasil'`. Para fechar essa lacuna há um **modal bloqueante** (`components/LocationGateModal.tsx`):
+  - Renderizado via **React Portal** (`createPortal` para `document.body`, `z-[2000]`) e **montado uma vez no `Layout`** — logo cobre **todas** as telas autenticadas (tanto `RootRoute`/`Home` quanto qualquer `ProtectedRoute`).
+  - **Auto-gate**: o próprio componente decide se aparece via `isLocationMissing` (`location` ausente, `=== 'Brasil'`, ou sem `" - "`); retorna `null` quando a localização é válida.
+  - **Não-dispensável**: sem botão de fechar, sem clique-no-backdrop, sem `Esc`, e trava o scroll do `body`. Só o botão **"Finalizar acesso"** o encerra. Coleta Estado → Cidade (selects IBGE encadeados), grava via `userService.updateUserProfile(user.id, { location })` e chama `refreshUser()` — o `user.location` atualiza, `isLocationMissing` vira `false` e o modal desmonta.
+  - **`Profile`** (`pages/Profile.tsx`) também tem os selects de Estado/Cidade (IBGE) para editar depois; o placeholder `'Brasil'` **não** é pré-carregado no campo de cidade, forçando uma seleção válida antes de salvar.
 
 ---
 

@@ -77,15 +77,18 @@ export const AuthService = {
     }
   },
 
-  loginWithGoogle: async () => {
+  loginWithGoogle: async (): Promise<string | undefined> => {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin }
       });
-      if (error) throw error;
+      // Em caso de sucesso o navegador é redirecionado para o Google,
+      // então este ponto normalmente não é alcançado.
+      if (error) return error.message;
     } catch (e: any) {
       console.error('Google login error:', e);
+      return e.message || 'Não foi possível conectar com o Google. Tente novamente.';
     }
   },
 

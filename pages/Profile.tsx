@@ -37,7 +37,7 @@ export const Profile: React.FC = () => {
     const [cropperImageSrc, setCropperImageSrc] = useState<string | null>(null);
 
     useEffect(() => { IBGEService.getUFs().then(setUfs); }, []);
-    useEffect(() => { if (user) { setFormData({ name: user.name || '', contactPhone: user.contactPhone || '' }); setAvatarPreview(user.avatarUrl); if (user.location && user.location.includes(' - ')) { const parts = user.location.split(' - '); const uf = parts.pop(); const city = parts.join(' - '); if (uf) setSelectedUf(uf); if (city) setSelectedCity(city); } else if (user.location) { setSelectedCity(user.location); } } }, [user]);
+    useEffect(() => { if (user) { setFormData({ name: user.name || '', contactPhone: user.contactPhone || '' }); setAvatarPreview(user.avatarUrl); if (user.location && user.location.includes(' - ')) { const parts = user.location.split(' - '); const uf = parts.pop(); const city = parts.join(' - '); if (uf) setSelectedUf(uf); if (city) setSelectedCity(city); } else if (user.location && user.location !== 'Brasil') { setSelectedCity(user.location); } } }, [user]);
     useEffect(() => { if (selectedUf) { IBGEService.getCitiesByUF(selectedUf).then(setCities); } else { setCities([]); } }, [selectedUf]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { 

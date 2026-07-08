@@ -71,12 +71,13 @@ Config do projeto (linhas 9-16): `projectId: "cine-guard"`, `storageBucket: "cin
 
 ## AuthService (`services/auth.ts`)
 
-Objeto com quatro métodos. Toda leitura de perfil delega para `userService.getUserProfile` (que recalcula reputação).
+Objeto com cinco métodos. Toda leitura de perfil delega para `userService.getUserProfile` (que recalcula reputação).
 
 | Função | Assinatura | Retorno |
 | --- | --- | --- |
-| `getSession` | `() => Promise<User \| null>` | Perfil do usuário logado, ou `null`. |
+| `getSession` | `() => Promise<User \| null>` | Perfil do usuário logado, ou `null`. Auto-cria o perfil no 1º login OAuth com `location: 'Brasil'` (placeholder — ver onboarding em `../05-frontend.md`). |
 | `login` | `(email: string, password: string) => Promise<{ user: User \| null; error?: string }>` | Perfil + erro opcional. |
+| `loginWithGoogle` | `() => Promise<string \| undefined>` | Dispara `supabase.auth.signInWithOAuth({ provider: 'google' })`. Sucesso → redireciona o navegador; falha → `string` de erro para a página exibir. |
 | `register` | `(email, password, name, location, referralCode?) => Promise<{ user: User \| null; error?: string }>` | Perfil recém-criado + erro opcional. |
 | `logout` | `() => Promise<void>` | — |
 
