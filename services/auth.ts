@@ -12,7 +12,46 @@ export const AuthService = {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const profile = await userService.getUserProfile(session.user.id);
+        let profile = await userService.getUserProfile(session.user.id);
+        
+        // Auto-create profile for first-time OAuth logins
+        if (!profile) {
+          const name = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuário';
+          const avatarUrl = session.user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+          
+          const firstName = name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+          const randomSuffix = Math.random().toString(36).substring(2, 6);
+          const myReferralCode = `${firstName}-${randomSuffix}`;
+          
+          const newUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: name,
+            location: 'Brasil', // Default
+            avatarUrl: avatarUrl,
+            reputationPoints: 0,
+            isVerified: false,
+            role: 'user',
+            referralCode: myReferralCode,
+            referralCount: 0,
+            usageStats: { serialChecks: {count: 0, month: ''}, contactReveals: {count: 0, month: ''} }
+          };
+          
+          await userService.saveUser(newUser);
+          
+          // Grant raffle signup tickets if any active raffles exist
+          try {
+            const activeRaffles = await raffleService.getActiveRaffles();
+            for (const raffle of activeRaffles) {
+                await raffleService.grantSignupTicket(raffle.id, newUser);
+            }
+          } catch (e) {
+              console.error('Erro ao conceder tickets de sorteio no OAuth:', e);
+          }
+          
+          profile = newUser;
+        }
+        
         return profile;
       }
       return null;
@@ -35,6 +74,30 @@ export const AuthService = {
         return { user: profile };
     } catch (e: any) {
         return { user: null, error: e.message || 'Erro no login.' };
+    }
+  },
+
+  loginWithGoogle: async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin }
+      });
+      if (error) throw error;
+    } catch (e: any) {
+      console.error('Google login error:', e);
+    }
+  },
+
+  loginWithApple: async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: { redirectTo: window.location.origin }
+      });
+      if (error) throw error;
+    } catch (e: any) {
+      console.error('Apple login error:', e);
     }
   },
 
