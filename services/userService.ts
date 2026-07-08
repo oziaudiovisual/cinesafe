@@ -238,7 +238,7 @@ export const userService = {
   incrementUserStat: async (userId: string, stat: 'checksCount' | 'reportsCount') => {
     if (stat === 'checksCount') await userService.incrementUsage(userId, 'check');
     const dbField = stat === 'checksCount' ? 'checks_count' : 'reports_count';
-    const { data: row } = await supabase.from('users').select(dbField).eq('id', userId).single();
+    const { data: row } = await supabase.from('users').select(dbField).eq('id', userId).maybeSingle();
     if (row) {
       await supabase.from('users').update({ [dbField]: (row[dbField] || 0) + 1 }).eq('id', userId);
     }
@@ -370,7 +370,7 @@ export const userService = {
       supabase.from('equipment').select('*', { count: 'exact', head: true }).eq('is_for_sale', true),
       supabase.from('equipment').select('value'),
       supabase.from('theft_history').select('equipment_value'),
-      supabase.from('global_stats').select('*').eq('id', 'global').single(),
+      supabase.from('global_stats').select('*').eq('id', 'global').maybeSingle(),
     ]);
 
     const totalValue = (eqAll.data || []).reduce((s: number, r: any) => s + (Number(r.value) || 0), 0);

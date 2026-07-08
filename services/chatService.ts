@@ -31,7 +31,7 @@ export const chatService = {
   // Garante que a conversa existe e devolve o id. Idempotente.
   openChat: async (me: User, other: { id: string; name: string; avatarUrl: string }): Promise<string> => {
     const id = chatIdFor(me.id, other.id);
-    const { data: existing } = await supabase.from('chats').select('id').eq('id', id).single();
+    const { data: existing } = await supabase.from('chats').select('id').eq('id', id).maybeSingle();
     
     if (!existing) {
       const now = new Date().toISOString();

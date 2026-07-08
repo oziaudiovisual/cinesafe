@@ -141,7 +141,7 @@ export const contractService = {
         await supabase.from('contracts').update({ status: 'active', updated_at: new Date().toISOString() }).eq('id', contract.id);
       }
       // Contador de impacto global
-      const { data: stats } = await supabase.from('global_stats').select('*').eq('id', 'global').single();
+      const { data: stats } = await supabase.from('global_stats').select('*').eq('id', 'global').maybeSingle();
       if (stats) {
         await supabase.from('global_stats').update({
           transactions_count: (stats.transactions_count || 0) + 1,

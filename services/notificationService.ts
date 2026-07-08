@@ -91,7 +91,7 @@ export const notificationService = {
             .from('users')
             .select('notification_stats')
             .eq('id', notification.toUserId)
-            .single();
+            .maybeSingle();
           if (user) {
             const stats = user.notification_stats || { rentalInterest: 0, saleInterest: 0, stolenAlerts: 0 };
             stats[statField] = (stats[statField] || 0) + 1;
