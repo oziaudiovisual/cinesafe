@@ -1,6 +1,7 @@
 
 import { auth } from './firebase';
 import { userService } from './userService';
+import { raffleService } from './raffleService';
 import { User } from '../types';
 
 export const AuthService = {
@@ -68,7 +69,17 @@ export const AuthService = {
 
         // Process Referral
         if (referralCode) {
-            await userService.processReferral(referralCode);
+            await userService.processReferral(referralCode, newUser);
+        }
+
+        // Sorteios: conceder ticket de cadastro para todos os sorteios ativos
+        try {
+            const activeRaffles = await raffleService.getActiveRaffles();
+            for (const raffle of activeRaffles) {
+                await raffleService.grantSignupTicket(raffle.id, newUser);
+            }
+        } catch (e) {
+            console.error('Erro ao conceder tickets de sorteio no cadastro:', e);
         }
 
         return { user: newUser };
@@ -83,3 +94,4 @@ export const AuthService = {
     await auth.signOut();
   }
 };
+

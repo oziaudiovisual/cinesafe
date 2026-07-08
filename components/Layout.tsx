@@ -27,6 +27,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
     { to: '/inventory', label: 'Inventário', icon: Icons.Camera },
     { to: '/rentals', label: 'Alugar', icon: Icons.ShoppingBag },
     { to: '/sales', label: 'Comprar', icon: Icons.Tag },
+    { to: '/raffles', label: 'Sorteios', icon: Icons.Gift },
     { to: '/safety', label: 'Segurança', icon: Icons.Siren },
     { to: '/check-serial', label: 'Verificar', icon: Icons.Search },
     { to: '/rankings', label: 'Ranking', icon: Icons.Trophy },

@@ -106,7 +106,9 @@ export type NotificationType =
   | 'CONNECTION_REQUEST'
   | 'CONNECTION_ACCEPTED'
   | 'ITEM_TRANSFER'
-  | 'RENTAL_OVERDUE';
+  | 'RENTAL_OVERDUE'
+  | 'RAFFLE_TICKET'
+  | 'RAFFLE_WINNER';
 
 export interface Notification {
   id: string;
@@ -233,4 +235,41 @@ export interface DetailedStats {
   itemsForSaleCount: number;
   transactionsCount?: number;   // impacto global: transações fechadas
   transactedValue?: number;     // impacto global: valor total movimentado
+}
+
+// --- SORTEIOS ---
+
+export type RaffleStatus = 'draft' | 'active' | 'completed' | 'cancelled';
+
+export interface Raffle {
+  id: string;
+  title: string;              // "Câmera Sony A7III"
+  description: string;        // Descrição do prêmio
+  prizeImageUrl?: string;     // Foto do prêmio (Storage)
+  status: RaffleStatus;
+  createdBy: string;          // admin userId
+  startDate: string;          // ISO — início do período de participação
+  endDate: string;            // ISO — fim (data do sorteio)
+  createdAt: string;
+  updatedAt: string;
+  // Resultado
+  winnerId?: string;          // userId do vencedor
+  winnerName?: string;        // snapshot
+  winnerAvatar?: string;      // snapshot
+  drawnAt?: string;           // ISO da realização do sorteio
+  // Contadores (denormalizados para exibição rápida)
+  totalTickets: number;       // soma de todos os tickets
+  totalParticipants: number;  // quantos usuários distintos participam
+}
+
+export interface RaffleTicket {
+  id: string;
+  raffleId: string;           // FK → raffles
+  userId: string;             // quem ganhou este ticket
+  userName: string;           // snapshot
+  userAvatar: string;         // snapshot
+  source: 'signup' | 'referral'; // como ganhou: cadastro ou convite
+  referredUserId?: string;    // se source='referral', quem foi o convidado
+  referredUserName?: string;  // snapshot
+  createdAt: string;
 }

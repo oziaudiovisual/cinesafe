@@ -18,6 +18,8 @@ Toda persistência do Cine Safe vive no **Cloud Firestore** do projeto Firebase 
 | `contracts` | `id` (UUID) | Ciclo de aluguel/venda entre duas partes | Não (só partes + admin) |
 | `return_alerts` | `id` = `contractId` | Alerta público de não-devolução | Sim (leitura livre) |
 | `stats/global` | doc fixo `global` | Contadores agregados de impacto | Não (só autenticados) |
+| `raffles` | `id` (UUID) | Sorteios de equipamentos para a comunidade | Não (só autenticados) |
+| `raffle_tickets` | `id` (UUID) | Tickets individuais de participação em sorteios | Não (só autenticados) |
 
 ## Diagrama ER
 
@@ -85,6 +87,23 @@ erDiagram
         string ownerId FK
         string renterId FK
     }
+    raffles {
+        string id PK
+        string status "RaffleStatus"
+        string createdBy FK
+        string winnerId FK "nullable"
+        number totalTickets
+        number totalParticipants
+    }
+    raffle_tickets {
+        string id PK
+        string raffleId FK
+        string userId FK
+        string source "signup | referral"
+    }
+    users ||--o{ raffle_tickets : "ganha (userId)"
+    raffles ||--o{ raffle_tickets : "contém (raffleId)"
+    users ||--o| raffles : "vence (winnerId)"
 ```
 
 ---
@@ -457,4 +476,56 @@ Outros campos são "snapshots" denormalizados no momento da criação (nome/avat
 - [`services/notificationService.ts`](../services/notificationService.ts) — `notifications`, auto-exclusão/expiração, `notificationStats`.
 - [`services/chatService.ts`](../services/chatService.ts) — `chats` + `messages`, ID determinístico, `participantInfo`.
 - [`services/adService.ts`](../services/adService.ts) — `ads`, seleção ponderada, métricas.
+- [`services/raffleService.ts`](../services/raffleService.ts) — `raffles`, `raffle_tickets`, CRUD, tickets, sorteio, leaderboard.
 - [`firestore.rules`](../firestore.rules) — regras de acesso por coleção, leitura pública parcial, defesa por-campo, "grounded" de `return_alerts`.
+
+---
+
+## `raffles`
+
+Sorteios de equipamentos para a comunidade. Criados e gerenciados pelo admin. Interface `Raffle` em [`types.ts`](../types.ts). Serviço: [`services/raffleService.ts`](../services/raffleService.ts).
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `id` | `string` | UUID (`crypto.randomUUID()`). |
+| `title` | `string` | Nome do prêmio. |
+| `description` | `string` | Descrição do prêmio e regras. |
+| `prizeImageUrl?` | `string` | URL da foto do prêmio (Storage, WebP). |
+| `status` | `RaffleStatus` | `'draft'` \| `'active'` \| `'completed'` \| `'cancelled'`. |
+| `createdBy` | `string` | Admin que criou. FK para `users`. |
+| `startDate` | `string` | ISO — início do período de participação. |
+| `endDate` | `string` | ISO — fim / data do sorteio. |
+| `createdAt` | `string` | ISO da criação. |
+| `updatedAt` | `string` | ISO da última atualização. |
+| `winnerId?` | `string` | userId do vencedor (após sorteio). FK para `users`. |
+| `winnerName?` | `string` | Nome do vencedor (snapshot). |
+| `winnerAvatar?` | `string` | Avatar do vencedor (snapshot). |
+| `drawnAt?` | `string` | ISO da realização do sorteio. |
+| `totalTickets` | `number` | Soma de todos os tickets (denormalizado, via `increment`). |
+| `totalParticipants` | `number` | Participantes distintos (denormalizado, via `increment`). |
+
+**Restrição de negócio:** apenas um sorteio ativo por vez (validado no formulário do admin, não nas rules).
+
+**Relacionamentos:** `createdBy` → `users`; `winnerId` → `users`; 1:N para `raffle_tickets`.
+
+---
+
+## `raffle_tickets`
+
+Tickets individuais de participação em sorteios. Cada ticket representa uma entrada no sorteio. Interface `RaffleTicket` em [`types.ts`](../types.ts). Serviço: [`services/raffleService.ts`](../services/raffleService.ts).
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `id` | `string` | UUID (`crypto.randomUUID()`). |
+| `raffleId` | `string` | Sorteio ao qual pertence. FK para `raffles`. |
+| `userId` | `string` | Dono do ticket. FK para `users`. |
+| `userName` | `string` | Nome do dono (snapshot). |
+| `userAvatar` | `string` | Avatar do dono (snapshot). |
+| `source` | `'signup'` \| `'referral'` | Origem: cadastro na plataforma ou convite de amigo. |
+| `referredUserId?` | `string` | Se `source='referral'`, quem se cadastrou. FK para `users`. |
+| `referredUserName?` | `string` | Nome do cadastrado (snapshot). |
+| `createdAt` | `string` | ISO. |
+
+**Relacionamentos:** `raffleId` → `raffles`; `userId` → `users`; `referredUserId` → `users`.
+
+Ver [features/raffles.md](features/raffles.md).

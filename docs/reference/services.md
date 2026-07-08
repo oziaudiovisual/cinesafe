@@ -40,6 +40,7 @@ flowchart TD
 | notificationService | `services/notificationService.ts` | Notificações privadas ao destinatário. |
 | chatService | `services/chatService.ts` | Conversas 1:1 e mensagens. |
 | adService | `services/adService.ts` | Banners de anúncio e métricas. |
+| raffleService | `services/raffleService.ts` | Sorteios, tickets, sorteio ponderado, leaderboard. |
 | IBGEService | `services/ibge.ts` | Estados e municípios (API pública do IBGE). |
 | StorageService | `services/storage.ts` | Facade legado que reencaminha para os serviços de domínio. |
 
@@ -332,6 +333,54 @@ Algoritmo de ponderação (linhas 47-54): soma os `weight`, sorteia `random ∈ 
 
 ---
 
+## raffleService (`services/raffleService.ts`)
+
+Gerencia sorteios de equipamentos para a comunidade. Coleções: `raffles`, `raffle_tickets`.
+
+### CRUD (Admin)
+
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `createRaffle(data)` | `Raffle \| null` | Cria um sorteio com contadores zerados. Filtra `undefined`. |
+| `updateRaffle(raffleId, updates)` | `boolean` | Atualiza campos do sorteio. Adiciona `updatedAt`. |
+| `deleteRaffle(raffleId)` | `boolean` | Exclui o sorteio E todos os tickets via `writeBatch`. |
+
+### Leitura
+
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `getActiveRaffles()` | `Raffle[]` | Sorteios com `status == 'active'` e `endDate >= hoje`. |
+| `getAllRaffles()` | `Raffle[]` | Todos, ordenados por `createdAt` desc. |
+| `getRaffleById(raffleId)` | `Raffle \| null` | Sorteio específico. |
+| `getRaffleTickets(raffleId)` | `RaffleTicket[]` | Todos os tickets de um sorteio. |
+| `getUserTickets(raffleId, userId)` | `RaffleTicket[]` | Tickets de um usuário em um sorteio. |
+
+### Tickets
+
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `grantSignupTicket(raffleId, user)` | `boolean` | 1 ticket por cadastro. Incrementa `totalTickets` + `totalParticipants`. |
+| `grantReferralTicket(raffleId, referrer, referredUser)` | `boolean` | 1 ticket por referral. Incrementa `totalTickets`; `totalParticipants` só se é novo. |
+
+Ambos usam `writeBatch` para atomicidade (ticket + contadores).
+
+### Sorteio
+
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `drawWinner(raffleId)` | `{ winnerId, winnerName } \| null` | Seleciona vencedor ponderado (`Math.random() * tickets.length`). Atualiza raffle (`completed`) e notifica (`RAFFLE_WINNER`). |
+
+### Leaderboard & Upload
+
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `getRaffleLeaderboard(raffleId)` | `{ userId, userName, userAvatar, ticketCount }[]` | Top participantes por tickets. Agrega no cliente. |
+| `uploadPrizeImage(file)` | `string \| null` | Upload de imagem do prêmio (WebP via `processImageForWebP`). |
+
+Ver [features/raffles.md](../features/raffles.md) para o fluxo completo.
+
+---
+
 ## IBGEService (`services/ibge.ts`)
 
 Único serviço que **não** fala com o Firebase: consome a API pública de localidades do IBGE via `fetch`. Usado nos seletores de UF/cidade (registro, filtros de marketplace).
@@ -385,7 +434,8 @@ Demais métodos são aliases diretos, agrupados por domínio no arquivo: **User*
 - `services/notificationService.ts`
 - `services/chatService.ts`
 - `services/adService.ts`
+- `services/raffleService.ts`
 - `services/storage.ts`
 - `services/ibge.ts`
-- `types.ts` (interfaces `User`, `Equipment`, `Contract`, `ReturnAlert`, `Notification`, `Ad`, `DetailedStats`, `MarketplaceFilters`, `UsageStats`, `NotificationStats`)
+- `types.ts` (interfaces `User`, `Equipment`, `Contract`, `ReturnAlert`, `Notification`, `Ad`, `Raffle`, `RaffleTicket`, `DetailedStats`, `MarketplaceFilters`, `UsageStats`, `NotificationStats`)
 - `utils/imageProcessor.ts` (`processImageForWebP`, `resilientUpload`, `cropImageHelper`)

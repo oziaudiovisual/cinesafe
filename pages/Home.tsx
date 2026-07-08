@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Icons } from '../components/Icons';
 import { ReferralModal } from '../components/ReferralModal';
-import { Notification } from '../types';
+import { RaffleCard } from '../components/RaffleCard';
+import { Notification, Raffle } from '../types';
 import { AdBanner } from '../components/AdBanner';
 import { notificationService } from '../services/notificationService';
 import { userService } from '../services/userService';
+import { raffleService } from '../services/raffleService';
 import { useUserStats } from '../hooks/useUserStats';
 import { useAd } from '../hooks/useAd';
 
@@ -17,6 +19,8 @@ export const Home: React.FC = () => {
   
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showReferralModal, setShowReferralModal] = useState(false);
+  const [activeRaffle, setActiveRaffle] = useState<Raffle | null>(null);
+  const [raffleTicketCount, setRaffleTicketCount] = useState(0);
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -26,7 +30,20 @@ export const Home: React.FC = () => {
       }
     };
     loadNotifications();
+    loadActiveRaffle();
   }, [user]);
+
+  const loadActiveRaffle = async () => {
+    if (!user) return;
+    try {
+      const raffles = await raffleService.getActiveRaffles();
+      if (raffles.length > 0) {
+        setActiveRaffle(raffles[0]);
+        const tickets = await raffleService.getUserTickets(raffles[0].id, user.id);
+        setRaffleTicketCount(tickets.length);
+      }
+    } catch (e) { /* silencioso */ }
+  };
   
   const getGreeting = () => {
     try {
@@ -106,6 +123,12 @@ export const Home: React.FC = () => {
                  </div>
             </div>
         </div>
+
+        {/* Banner do Sorteio Ativo */}
+        {activeRaffle && (
+            <RaffleCard raffle={activeRaffle} userTicketCount={raffleTicketCount} />
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {isProfileIncomplete && <ActionCard icon={Icons.User} color="warning" title="Complete seu Perfil" text="Adicione foto e telefone para ganhar +100 XP e confiança." link="/profile" linkText="Atualizar Agora" />}
             {hasNoInventory && <ActionCard icon={Icons.Plus} color="primary" title="Proteja seus Itens" text="Seu inventário está vazio. Cadastre equipamentos para proteção." link="/inventory" linkText="Cadastrar Primeiro Item" />}

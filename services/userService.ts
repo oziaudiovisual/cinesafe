@@ -122,12 +122,30 @@ export const userService = {
     await updateDoc(doc(db, 'users', userId), { usageStats });
   },
 
-  processReferral: async (referralCode: string) => {
+  processReferral: async (referralCode: string, newUser?: User) => {
     const q = query(collection(db, 'users'), where('referralCode', '==', referralCode));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
       const referrerDoc = snapshot.docs[0];
       await updateDoc(referrerDoc.ref, { referralCount: increment(1) });
+
+      // Sorteios: conceder ticket de referral ao indicador para sorteios ativos
+      if (newUser) {
+        try {
+          const { raffleService } = await import('./raffleService');
+          const activeRaffles = await raffleService.getActiveRaffles();
+          const referrer = referrerDoc.data() as User;
+          for (const raffle of activeRaffles) {
+            await raffleService.grantReferralTicket(
+              raffle.id,
+              referrer,
+              { id: newUser.id, name: newUser.name }
+            );
+          }
+        } catch (e) {
+          console.error('Erro ao conceder tickets de referral no sorteio:', e);
+        }
+      }
     }
   },
 

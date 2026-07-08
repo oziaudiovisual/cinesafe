@@ -345,4 +345,17 @@ Não há tela de "upgrade": a transição para Premium é implícita e reavaliad
 - [`pages/SerialCheck.tsx`](../reference/pages.md), [`pages/Sales.tsx`](../reference/pages.md), [`pages/Rentals.tsx`](../reference/pages.md), [`hooks/useInventory.ts`](../reference/hooks.md) — pontos onde `checkLimit`/`incrementUsage` são aplicados.
 - [`types.ts`](../03-data-model.md) — `User` (campos de referral) e `UsageStats`.
 
-Relacionados: [`inventory.md`](./inventory.md) · [`marketplace.md`](./marketplace.md) · [`theft-and-safety.md`](./theft-and-safety.md) · [`../04-security.md`](../04-security.md) · [`../03-data-model.md`](../03-data-model.md).
+Relacionados: [`inventory.md`](./inventory.md) · [`marketplace.md`](./marketplace.md) · [`theft-and-safety.md`](./theft-and-safety.md) · [`raffles.md`](./raffles.md) · [`../04-security.md`](../04-security.md) · [`../03-data-model.md`](../03-data-model.md).
+
+---
+
+## Integração com Sorteios
+
+O sistema de referral foi estendido para conceder **tickets de sorteio** quando há sorteios ativos:
+
+- **`processReferral`** agora aceita um segundo parâmetro `newUser?: User`. Quando presente, percorre os sorteios ativos e chama `raffleService.grantReferralTicket` para cada um, dando +1 ticket ao indicador.
+- **`AuthService.register`** também percorre os sorteios ativos após salvar o perfil, chamando `raffleService.grantSignupTicket` para dar +1 ticket ao novo usuário.
+
+Dessa forma, o mesmo link de convite (`?ref=CODE`) que credita indicações para o Premium agora também gera tickets para sorteios, criando um incentivo duplo.
+
+Ver [`features/raffles.md`](./raffles.md) para detalhes completos do sistema de sorteios.

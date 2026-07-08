@@ -41,6 +41,7 @@ const Network = lazyWithReload(() => import('./pages/Network').then(module => ({
 const Landing = lazyWithReload(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
 const Chat = lazyWithReload(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
 const Contracts = lazyWithReload(() => import('./pages/Contracts').then(module => ({ default: module.Contracts })));
+const Raffles = lazyWithReload(() => import('./pages/Raffles').then(module => ({ default: module.Raffles })));
 
 // Loading Component
 const PageLoader = () => (
@@ -138,6 +139,7 @@ function App() {
             <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
+            <Route path="/raffles" element={<ProtectedRoute><Raffles /></ProtectedRoute>} />
 
             {/* Admin Route */}
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />

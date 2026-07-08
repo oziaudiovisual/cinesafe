@@ -70,6 +70,7 @@ Como cada funcionalidade de domínio funciona de verdade.
 - [Indicações (Referral) & Freemium](features/referral-and-freemium.md)
 - [Anúncios](features/advertising.md)
 - [Painel administrativo](features/admin.md)
+- [Sorteios](features/raffles.md)
 
 ---
 

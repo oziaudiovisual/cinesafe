@@ -401,6 +401,8 @@ transações). Contadores de notificação **não** entram no global — são pr
 | `contracts` | partes ou admin | dono nas partes | partes | **nunca** |
 | `stats` | autenticado | — (write) | autenticado (write) | — |
 | `return_alerts` | público | dono do contrato real vs. locatário real | emissor | **nunca** |
+| `raffles` | autenticado | admin | admin | admin |
+| `raffle_tickets` | autenticado | auto-atribuição (`userId == auth.uid`) | admin | admin |
 
 ---
 

@@ -150,5 +150,20 @@ service cloud.firestore {
       allow update: if isSignedIn() && request.auth.uid == resource.data.ownerId;
       allow delete: if false;
     }
+
+    // ---- RAFFLES ---- (sorteios: leitura por autenticados; CRUD somente admin)
+    match /raffles/{raffleId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- RAFFLE_TICKETS ---- (tickets de sorteio: leitura por autenticados;
+    // criação por autenticados com auto-atribuição; edição/exclusão admin)
+    match /raffle_tickets/{ticketId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
   }
 }
