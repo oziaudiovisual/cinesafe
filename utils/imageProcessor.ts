@@ -6,20 +6,36 @@ export const processImageForWebP = async (file: File): Promise<Blob> => {
     img.src = URL.createObjectURL(file);
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const targetWidth = 480; // Optimize for mobile/web performance
-      const scaleFactor = targetWidth / img.width;
-      canvas.width = targetWidth;
-      canvas.height = img.height * scaleFactor;
+      const maxDimension = 800; // Limite máximo de largura OU altura
+      
+      let width = img.width;
+      let height = img.height;
+      
+      // Redimensiona pelo lado maior, mantendo proporção
+      if (width > maxDimension || height > maxDimension) {
+        if (width >= height) {
+          height = Math.round(height * (maxDimension / width));
+          width = maxDimension;
+        } else {
+          width = Math.round(width * (maxDimension / height));
+          height = maxDimension;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
       
       const ctx = canvas.getContext('2d');
       if (!ctx) return reject('Canvas context not available');
       
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      URL.revokeObjectURL(img.src); // Libera memória do blob URL
       
       canvas.toBlob((blob) => {
         if (blob) resolve(blob);
         else reject('Image processing failed');
-      }, 'image/webp', 0.85); // 85% quality WebP
+      }, 'image/webp', 0.75); // 75% quality WebP
     };
     img.onerror = reject;
   });
