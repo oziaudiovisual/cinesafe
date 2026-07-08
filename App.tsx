@@ -124,6 +124,18 @@ class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, 
 }
 
 function App() {
+  React.useEffect(() => {
+    // Intercepta erros de autenticação do Supabase na URL (HashRouter)
+    if (window.location.hash && window.location.hash.includes('error=')) {
+      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+      const errorDesc = hashParams.get('error_description');
+      if (errorDesc) {
+        alert('Ops! Ocorreu um erro: ' + errorDesc.replace(/\+/g, ' '));
+      }
+      window.location.hash = '#/login';
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <HashRouter>
