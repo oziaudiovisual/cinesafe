@@ -51,8 +51,8 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
             <div className="absolute top-0 left-0 w-full h-32 bg-accent-primary/10 blur-2xl pointer-events-none"></div>
 
             {/* Header */}
-            <div className="px-[18px] py-4 flex items-center z-10">
-                <CineSafeLogo className="w-full" />
+            <div className="px-[18px] py-3 flex items-center justify-center z-10">
+                <CineSafeLogo className="w-3/5" />
             </div>
 
             {/* Navigation */}
