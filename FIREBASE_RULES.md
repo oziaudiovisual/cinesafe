@@ -21,10 +21,18 @@ Elas substituem o "allow all" do MVP mantendo o app funcionando.
   cria, desde que assine como remetente.
 - **Histórico de roubo** imutável após criado; **anúncios** só admin cria/edita.
 
-> Trade-off conhecido: `users` permite atualização por qualquer autenticado, porque
-> o app faz escritas cruzadas pelo cliente (conexões mútuas, referral,
-> `notificationStats`, `transactionHistory`). Endurecer isso exige mover essas
-> escritas para Cloud Functions — é o item de segurança do plano de otimizações.
+- **Anti-escalonamento de privilégio (`users`):** a atualização é validada por
+  campo. O dono edita o próprio perfil, mas **não** pode mudar `role`, `isBlocked`
+  nem `referralCount` (senão viraria admin/Premium ou se desbloquearia). Outro
+  usuário só consegue tocar os campos das escritas cruzadas legítimas
+  (`connections`, `notificationStats`, `transactionHistory`, `referralCount`), e
+  nada mais. Admin faz tudo (painel).
+
+> Defesa em profundidade pendente: mover as escritas cruzadas para Cloud Functions
+> (para que nem os campos de fluxo possam ser adulterados entre usuários) e validar
+> os limites de uso no servidor. Isso exige um ambiente de teste (emulador do
+> Firebase com Java, ou staging) para não arriscar os fluxos de autenticação em
+> produção — ficou como próximo passo.
 
 ## Como publicar
 

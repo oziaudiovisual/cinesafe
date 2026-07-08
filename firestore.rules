@@ -23,11 +23,23 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
-      // Atualização permitida a qualquer autenticado porque o app faz escritas
-      // cruzadas pelo cliente (conexões mútuas, referral, notificationStats e
-      // transactionHistory). Endurecer isso depende de mover essas escritas para
-      // Cloud Functions (item de segurança do plano).
-      allow update: if isSignedIn();
+
+      // Atualização com validação por campo (anti-escalonamento de privilégio):
+      // - Admin pode tudo (painel: promover, bloquear, excluir).
+      // - O dono edita o próprio perfil, MAS não pode alterar role, isBlocked nem
+      //   referralCount (senão viraria admin/Premium ou se desbloquearia sozinho).
+      // - Outro usuário só pode tocar os campos das escritas cruzadas legítimas
+      //   (conexões mútuas, notificationStats, transactionHistory, referral) — e
+      //   nada mais (não sobrescreve nome/perfil alheio).
+      allow update: if isAdmin()
+        || (isOwner(userId)
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.get('isBlocked', false) == resource.data.get('isBlocked', false)
+            && request.resource.data.get('referralCount', 0) == resource.data.get('referralCount', 0))
+        || (isSignedIn() && request.auth.uid != userId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['connections', 'notificationStats', 'transactionHistory', 'referralCount']));
+
       allow delete: if isOwner(userId) || isAdmin();
     }
 
