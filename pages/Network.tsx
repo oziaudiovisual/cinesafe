@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { User, Notification } from '../types';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { AdBanner } from '../components/AdBanner';
+import { useAd } from '../hooks/useAd';
 
 export const Network: React.FC = () => {
     const { user } = useAuth();
@@ -17,6 +19,7 @@ export const Network: React.FC = () => {
     const [searchResults, setSearchResults] = useState<User[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [loadingConnections, setLoadingConnections] = useState(true);
+    const { ad } = useAd();
     const [modalOpen, setModalOpen] = useState(false);
     const [modalConfig, setModalConfig] = useState<{ title: string; message: string; action: () => Promise<void>; confirmLabel: string; isDestructive?: boolean; }>({ title: '', message: '', action: async () => {}, confirmLabel: '' });
     const [modalProcessing, setModalProcessing] = useState(false);
@@ -90,6 +93,8 @@ export const Network: React.FC = () => {
                 </h1>
                 <p className="text-brand-400 mt-1">Construa conexões de confiança. Uma rede forte facilita transferências e aumenta sua segurança.</p>
             </header>
+
+            {ad && <div className="mb-6"><AdBanner ad={ad} /></div>}
 
             {/* Search Section */}
             <div className="glass-card p-6 rounded-[2rem] border border-white/5">

@@ -5,6 +5,8 @@ import { contractService } from '../services/contractService';
 import { Contract, ContractStatus } from '../types';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { AdBanner } from '../components/AdBanner';
+import { useAd } from '../hooks/useAd';
 
 const STATUS_META: Record<ContractStatus, { label: string; cls: string }> = {
   proposed: { label: 'Proposta', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
@@ -34,6 +36,7 @@ export const Contracts: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState<{ title: string; message: string; confirmLabel: string; isDestructive?: boolean; action: () => Promise<void> }>({ title: '', message: '', confirmLabel: '', action: async () => {} });
+  const { ad } = useAd();
 
   useEffect(() => {
     if (!user) return;
@@ -155,6 +158,8 @@ export const Contracts: React.FC = () => {
         <h1 className="text-3xl font-bold text-white flex items-center gap-3"><Icons.FileText className="w-8 h-8 text-accent-primary" /> Contratos</h1>
         <p className="text-brand-400 mt-1">Aluguéis e vendas fechados dentro do app, com registro para as duas partes.</p>
       </header>
+
+      {ad && <div className="mb-6"><AdBanner ad={ad} /></div>}
 
       {contracts.length === 0 ? (
         <div className="glass-card p-12 rounded-[2.5rem] text-center border border-white/5">

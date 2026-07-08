@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { chatService, ChatSummary, ChatMessage } from '../services/chatService';
 import { ContractModal } from '../components/ContractModal';
 import { Icons } from '../components/Icons';
+import { AdBanner } from '../components/AdBanner';
+import { useAd } from '../hooks/useAd';
 
 export const Chat: React.FC = () => {
   const { user } = useAuth();
@@ -15,6 +17,7 @@ export const Chat: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [contractOpen, setContractOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const { ad } = useAd();
 
   // Lista de conversas em tempo real.
   useEffect(() => {
@@ -51,7 +54,9 @@ export const Chat: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)] flex gap-4">
+    <div className="flex flex-col gap-4" style={{ height: 'calc(100vh - 6rem)' }}>
+      {ad && <div className="flex-shrink-0"><AdBanner ad={ad} /></div>}
+      <div className="flex-1 min-h-0 flex gap-4">
       {/* Conversation list */}
       <div className={`${selectedId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 glass-card rounded-[2rem] border border-white/5 overflow-hidden`}>
         <div className="p-5 border-b border-white/5">
@@ -150,6 +155,7 @@ export const Chat: React.FC = () => {
           onCreated={(summary) => { chatService.sendMessage(selectedChat.id, user.id, summary); }}
         />
       )}
+    </div>
     </div>
   );
 };
