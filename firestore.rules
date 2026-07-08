@@ -1,0 +1,82 @@
+rules_version = '2';
+
+// Regras do Firestore do Cine Safe.
+// Objetivo: sair do "allow all" do MVP mantendo o app funcionando e liberando
+// a LEITURA PÚBLICA apenas dos itens do marketplace (vitrine da página inicial).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ---- USERS ----
+    // Perfis são legíveis por usuários autenticados (rede, ranking, admin).
+    // NÃO são públicos: a página pública usa o ownerProfile já denormalizado no item.
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      // Atualização permitida a qualquer autenticado porque o app faz escritas
+      // cruzadas pelo cliente (conexões mútuas, referral, notificationStats e
+      // transactionHistory). Endurecer isso depende de mover essas escritas para
+      // Cloud Functions (item de segurança do plano).
+      allow update: if isSignedIn();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // ---- EQUIPMENT ----
+    // Leitura PÚBLICA somente dos itens do marketplace (SAFE + à venda/aluguel).
+    // Usuários autenticados leem tudo (inventário próprio, verificação de serial).
+    match /equipment/{itemId} {
+      allow read: if isSignedIn()
+                  || (resource.data.status == 'SAFE'
+                      && (resource.data.isForRent == true || resource.data.isForSale == true));
+
+      allow create: if isOwner(request.resource.data.ownerId);
+
+      // Dono edita seu item; admin gerencia; e o destinatário de uma transferência
+      // pendente pode assumir a posse (fecha o buraco de transferência sem validação).
+      allow update: if isOwner(resource.data.ownerId)
+                    || isAdmin()
+                    || (isSignedIn()
+                        && resource.data.status == 'TRANSFER_PENDING'
+                        && resource.data.pendingTransferTo == request.auth.uid
+                        && request.resource.data.ownerId == request.auth.uid);
+
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
+    // ---- NOTIFICATIONS ----
+    // Só o destinatário lê/gerencia; qualquer autenticado cria (interesse, convite,
+    // transferência, alerta de roubo), desde que assine como remetente.
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && resource.data.toUserId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.fromUserId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.toUserId == request.auth.uid;
+    }
+
+    // ---- THEFT_HISTORY ----
+    // Histórico de recuperação (alimenta o Mapa de Segurança). Imutável após criado.
+    match /theft_history/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---- ADS ----
+    // Banners de marketing: leitura livre; métricas (impressions/clicks) por qualquer
+    // autenticado; criação/edição total/remoção só admin.
+    match /ads/{adId} {
+      allow read: if true;
+      allow update: if isSignedIn();
+      allow create, delete: if isAdmin();
+    }
+  }
+}

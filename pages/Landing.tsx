@@ -21,15 +21,18 @@ export const Landing: React.FC = () => {
     (async () => {
       try {
         const [rentals, sales] = await Promise.all([
-          equipmentService.getRentalsPaginated(null, 12, {}),
-          equipmentService.getSalesPaginated(null, 12, {}),
+          equipmentService.getRentalsPaginated(null, 24, {}),
+          equipmentService.getSalesPaginated(null, 24, {}),
         ]);
         const combined: Listing[] = [
           ...rentals.data.map(item => ({ item, type: 'rent' as const })),
           ...sales.data.map(item => ({ item, type: 'sale' as const })),
         ];
-        // Intercala aluguel/venda para a vitrine não ficar em blocos separados
-        combined.sort((a, b) => a.item.name.localeCompare(b.item.name));
+        // Embaralha (Fisher-Yates) para exibir itens aleatórios a cada visita
+        for (let i = combined.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [combined[i], combined[j]] = [combined[j], combined[i]];
+        }
         if (mounted) setListings(combined);
       } catch (e) {
         // Degrada com elegância: se a leitura pública falhar, a página segue

@@ -1,89 +1,49 @@
+# Regras de Segurança - Cine Safe
 
-# Regras de Segurança Definitivas - Cine Safe
+As regras agora ficam **versionadas no repositório**:
 
-Para garantir a segurança dos dados e arquivos no Google Cloud/Firebase, **substitua imediatamente** as regras "allow all" usadas durante o MVP pelas regras abaixo antes de publicar a aplicação.
+- Firestore: [`firestore.rules`](firestore.rules)
+- Storage: [`storage.rules`](storage.rules)
+- Config de deploy: [`firebase.json`](firebase.json) e [`.firebaserc`](.firebaserc) (projeto `cine-guard`)
 
----
+Elas substituem o "allow all" do MVP mantendo o app funcionando.
 
-## 1. Cloud Storage (Arquivos)
+## O que essas regras fazem
 
-Estas regras garantem que:
-*   Qualquer usuário autenticado pode LER arquivos (necessário para visualizar itens de outros usuários).
-*   Usuários só podem ESCREVER (upload/delete) em suas próprias pastas.
-*   Apenas administradores podem gerenciar imagens de anúncios.
+- **Vitrine pública:** a página inicial é aberta, então a coleção `equipment` tem
+  **leitura pública apenas para os itens do marketplace** (`status == SAFE` e
+  `isForRent` ou `isForSale`). Inventário privado, notificações e perfis **não**
+  são públicos. As fotos dos itens (Storage) também têm leitura pública.
+- **Transferência de posse protegida:** só o destinatário de uma transferência
+  `TRANSFER_PENDING` consegue assumir o item (fecha o buraco de aceitar
+  transferência sem validação).
+- **Notificações privadas:** só o destinatário lê/gerencia; qualquer autenticado
+  cria, desde que assine como remetente.
+- **Histórico de roubo** imutável após criado; **anúncios** só admin cria/edita.
 
-**Vá para:** Firebase Console -> Storage -> Rules
+> Trade-off conhecido: `users` permite atualização por qualquer autenticado, porque
+> o app faz escritas cruzadas pelo cliente (conexões mútuas, referral,
+> `notificationStats`, `transactionHistory`). Endurecer isso exige mover essas
+> escritas para Cloud Functions — é o item de segurança do plano de otimizações.
 
+## Como publicar
+
+### Opção A — via CLI (recomendado)
+
+O CLI já está instalado, mas o login expirou. Rode uma vez:
+
+```bash
+firebase login --reauth        # abre o navegador (use a conta admin@ozi.com.br)
+firebase deploy --only firestore:rules,storage
 ```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    
-    // Regra Geral de Leitura: Usuários autenticados podem ver arquivos
-    allow read: if request.auth != null;
 
-    // Pasta de Usuários: Apenas o dono pode escrever
-    // Garante isolamento de dados de perfil, equipamentos e notas fiscais
-    match /users/{userId}/{allPaths=**} {
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
+### Opção B — via Console (copiar e colar)
 
-    // Pasta de Anúncios: Apenas Admins
-    match /ads/{filename} {
-      allow write: if request.auth != null && 
-                   firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-  }
-}
-```
+- **Firestore:** Firebase Console → Firestore Database → Rules → cole o conteúdo de
+  [`firestore.rules`](firestore.rules) → Publicar.
+- **Storage:** Firebase Console → Storage → Rules → cole o conteúdo de
+  [`storage.rules`](storage.rules) → Publicar.
 
----
-
-## 2. Cloud Firestore (Banco de Dados)
-
-Estas regras garantem que:
-*   Dados de usuários são protegidos contra escrita de terceiros.
-*   Equipamentos só podem ser editados pelos donos.
-*   Notificações são privadas.
-*   Histórico de roubo é imutável após criação.
-
-**Vá para:** Firebase Console -> Firestore Database -> Rules
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-  
-    // Usuários: Leitura pública (perfil), Escrita apenas pelo próprio usuário
-    match /users/{userId} {
-      allow read;
-      allow write: if request.auth.uid == userId;
-    }
-    
-    // Equipamentos: Leitura pública, Escrita apenas pelo dono
-    // Verifica ownership no recurso existente ou no novo recurso
-    match /equipment/{equipmentId} {
-      allow read;
-      allow create, update, delete: if request.auth.uid == resource.data.ownerId || request.auth.uid == request.resource.data.ownerId;
-    }
-    
-    // Notificações: Estritamente privadas para o destinatário
-    match /notifications/{notificationId} {
-      allow read, write, delete: if request.auth.uid == resource.data.toUserId || request.auth.uid == request.resource.data.toUserId;
-    }
-
-    // Histórico de Roubo: Leitura pública, Criação permitida, Edição/Exclusão negada
-    match /theft_history/{historyId} {
-      allow read;
-      allow create: if request.auth != null;
-      allow update, delete: if false;
-    }
-
-    // Anúncios: Leitura pública, Escrita apenas por Admins
-    match /ads/{adId} {
-      allow read;
-      allow write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-  }
-}
-```
+> Depois de publicar, confira na página inicial (deslogado) se a vitrine continua
+> mostrando os itens. Se ficar vazia, provavelmente faltou publicar as regras do
+> Firestore (a leitura pública de `equipment`).
