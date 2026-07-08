@@ -143,11 +143,11 @@ export const Raffles: React.FC = () => {
             )}
 
             <div className="relative z-10 p-5 md:p-6">
-              <div className="flex flex-col lg:flex-row gap-5">
-                {/* Lado esquerdo: Imagem + Info + Countdown */}
-                <div className="flex gap-4 items-start flex-1 min-w-0">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Coluna esquerda (50%): Imagem + Info + Countdown */}
+                <div className="flex gap-4 items-start">
                   {/* Imagem do prêmio */}
-                  <div className="w-28 h-28 md:w-32 md:h-32 rounded-2xl bg-black/30 border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                  <div className="w-28 h-28 md:w-36 md:h-36 rounded-2xl bg-black/30 border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
                     {selectedRaffle.prizeImageUrl ? (
                       <img
                         src={selectedRaffle.prizeImageUrl}
@@ -159,21 +159,21 @@ export const Raffles: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Info + Countdown empilhados */}
-                  <div className="flex-1 min-w-0">
+                  {/* Info + Countdown */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
                         isCompleted
                           ? 'bg-green-500/20 text-green-400 border border-green-500/20'
                           : 'bg-accent-primary/20 text-accent-primary border border-accent-primary/20'
                       }`}>
-                        {isCompleted ? '✨ Realizado' : '🎯 Ativo'}
+                        {isCompleted ? '✨ Realizado' : '🎯 Sorteio Ativo'}
                       </span>
                     </div>
-                    <h2 className="text-xl md:text-2xl font-extrabold text-white leading-tight truncate">
+                    <h2 className="text-xl md:text-2xl font-extrabold text-white leading-tight">
                       {selectedRaffle.title}
                     </h2>
-                    <p className="text-brand-400 text-xs mb-3 truncate">
+                    <p className="text-brand-400 text-xs mb-3 line-clamp-2">
                       {selectedRaffle.description}
                     </p>
 
@@ -205,8 +205,8 @@ export const Raffles: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Lado direito: Stats 2×2 */}
-                <div className="grid grid-cols-2 gap-2 flex-shrink-0 lg:w-56">
+                {/* Coluna direita (50%): Stats 2×2 preenchendo todo o espaço */}
+                <div className="grid grid-cols-2 gap-3 h-full">
                   {[
                     { label: 'Participantes', value: realTotalParticipants, icon: Icons.Users },
                     { label: 'Tickets Totais', value: realTotalTickets, icon: Icons.Ticket },
@@ -215,17 +215,17 @@ export const Raffles: React.FC = () => {
                   ].map((stat, i) => (
                     <div
                       key={i}
-                      className={`rounded-xl p-2.5 text-center ${
+                      className={`rounded-xl p-4 flex flex-col items-center justify-center ${
                         stat.highlight
                           ? 'bg-accent-primary/10 border border-accent-primary/20'
                           : 'bg-black/20 border border-white/5'
                       }`}
                     >
-                      <stat.icon className={`w-3.5 h-3.5 mx-auto mb-0.5 ${stat.highlight ? 'text-accent-primary' : 'text-brand-400'}`} />
-                      <span className={`text-lg font-extrabold block leading-tight ${stat.highlight ? 'text-accent-primary' : 'text-white'}`}>
+                      <stat.icon className={`w-5 h-5 mb-1 ${stat.highlight ? 'text-accent-primary' : 'text-brand-400'}`} />
+                      <span className={`text-2xl font-extrabold leading-tight ${stat.highlight ? 'text-accent-primary' : 'text-white'}`}>
                         {stat.value}
                       </span>
-                      <span className="text-brand-500 text-[9px] uppercase tracking-wider leading-tight">{stat.label}</span>
+                      <span className="text-brand-500 text-[10px] uppercase tracking-wider font-bold mt-0.5">{stat.label}</span>
                     </div>
                   ))}
                 </div>
