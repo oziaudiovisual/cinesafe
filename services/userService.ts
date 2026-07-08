@@ -149,7 +149,23 @@ export const userService = {
     try {
       const dbUpdates = mapUserToDb(updates);
       const { error } = await supabase.from('users').update(dbUpdates).eq('id', userId);
-      return !error;
+      if (error) return false;
+
+      // Sincronizar ownerProfile denormalizado nos equipamentos do usuário
+      if (updates.avatarUrl || updates.name || updates.location) {
+        const user = await userService.getUserProfile(userId);
+        if (user) {
+          await supabase.from('equipment').update({
+            owner_profile: {
+              name: user.name,
+              avatarUrl: user.avatarUrl,
+              location: user.location,
+            }
+          }).eq('owner_id', userId);
+        }
+      }
+
+      return true;
     } catch (e) { return false; }
   },
 

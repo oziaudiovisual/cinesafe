@@ -373,7 +373,7 @@ CREATE POLICY "raffle_tickets_delete_admin" ON public.raffle_tickets FOR DELETE 
 
 -- ============= STORAGE BUCKETS =============
 
-INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', false);
+INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true);
 INSERT INTO storage.buckets (id, name, public) VALUES ('equipment', 'equipment', true);
 INSERT INTO storage.buckets (id, name, public) VALUES ('invoices', 'invoices', false);
 INSERT INTO storage.buckets (id, name, public) VALUES ('contracts', 'contracts', false);
