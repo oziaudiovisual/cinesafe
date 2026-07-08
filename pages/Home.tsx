@@ -116,8 +116,8 @@ export const Home: React.FC = () => {
                                 </p>
                             </div>
                         </div>
-                        <Link to="/notifications" className={`w-full sm:w-auto font-bold px-5 py-2.5 rounded-xl transition-all border flex items-center justify-center gap-2 whitespace-nowrap text-sm ${unreadCount > 0 ? 'bg-accent-primary text-brand-950 border-accent-primary hover:bg-cyan-300' : 'bg-brand-800 hover:bg-brand-700 text-white border-brand-600'}`}>
-                            Ver Notificações <Icons.ArrowRight className="w-4 h-4" />
+                        <Link to="/chat?tab=notifications" className={`w-full sm:w-auto font-bold px-5 py-2.5 rounded-xl transition-all border flex items-center justify-center gap-2 whitespace-nowrap text-sm ${unreadCount > 0 ? 'bg-accent-primary text-brand-950 border-accent-primary hover:bg-cyan-300' : 'bg-brand-800 hover:bg-brand-700 text-white border-brand-600'}`}>
+                            Ver Mensagens <Icons.ArrowRight className="w-4 h-4" />
                         </Link>
                     </div>
                  </div>

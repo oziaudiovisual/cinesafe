@@ -48,7 +48,6 @@ const Register = lazyWithReload(() => import('./pages/Register').then(module => 
 const Profile = lazyWithReload(() => import('./pages/Profile').then(module => ({ default: module.Profile })));
 const AdminDashboard = lazyWithReload(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 const SafetyMap = lazyWithReload(() => import('./pages/SafetyMap').then(module => ({ default: module.SafetyMap })));
-const Notifications = lazyWithReload(() => import('./pages/Notifications').then(module => ({ default: module.Notifications })));
 const Network = lazyWithReload(() => import('./pages/Network').then(module => ({ default: module.Network })));
 const Landing = lazyWithReload(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
 const Chat = lazyWithReload(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
@@ -147,7 +146,7 @@ function App() {
             <Route path="/safety" element={<ProtectedRoute><SafetyMap /></ProtectedRoute>} />
             <Route path="/rankings" element={<ProtectedRoute><Rankings /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="/notifications" element={<Navigate to="/chat?tab=notifications" replace />} />
             <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
