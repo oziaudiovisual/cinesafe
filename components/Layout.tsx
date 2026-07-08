@@ -51,18 +51,18 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
             <div className="absolute top-0 left-0 w-full h-32 bg-accent-primary/10 blur-2xl pointer-events-none"></div>
 
             {/* Header */}
-            <div className="px-[18px] py-6 flex items-center z-10">
+            <div className="px-[18px] py-4 flex items-center z-10">
                 <CineSafeLogo className="w-full" />
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-4 space-y-2 z-10 overflow-y-auto custom-scrollbar py-4">
+            <nav className="flex-1 px-3 space-y-0.5 z-10 overflow-y-auto custom-scrollbar py-2">
                 {navItems.map((item) => (
                     <NavLink
                         key={item.to}
                         to={item.to}
                         className={({ isActive }) =>
-                            `flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+                            `flex items-center space-x-3 px-3 py-2 rounded-xl transition-all duration-300 group relative overflow-hidden ${
                             isActive
                                 ? 'text-white bg-white/5 shadow-lg border border-white/5'
                                 : 'text-brand-400 hover:text-white hover:bg-white/5'
@@ -84,7 +84,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
                     <NavLink
                         to="/admin"
                         className={({ isActive }) =>
-                        `flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-300 mt-6 border border-dashed border-accent-warning/30 ${
+                        `flex items-center space-x-3 px-3 py-2 rounded-xl transition-all duration-300 mt-3 border border-dashed border-accent-warning/30 ${
                             isActive
                             ? 'bg-accent-warning/10 text-accent-warning'
                             : 'text-accent-warning/70 hover:bg-accent-warning/10 hover:text-accent-warning'
@@ -98,7 +98,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
             </nav>
 
             {/* User Profile Footer */}
-            <div className="p-4 z-10 mt-auto space-y-4">
+            <div className="p-3 z-10 mt-auto space-y-3">
                 {user ? (
                     <>
                         <NavLink to="/report-theft" className="group relative overflow-hidden flex items-center justify-center space-x-2 w-full bg-gradient-to-r from-red-600 to-red-500 text-white p-3 rounded-xl transition-all hover:shadow-lg hover:shadow-red-500/20">
