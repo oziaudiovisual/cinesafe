@@ -25,32 +25,7 @@ export const processImageForWebP = async (file: File): Promise<Blob> => {
   });
 };
 
-export const resilientUpload = async (storageRef: any, blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const uploadTask = storageRef.put(blob);
-    
-    uploadTask.on(
-      'state_changed',
-      null, // Progress listener (can be added later)
-      (error: any) => {
-        // Handle Firebase specific errors
-        if (error.code === 'storage/unauthorized' && error.message.includes('CORS')) {
-          reject(new Error('CORS_CONFIG_ERROR'));
-        } else {
-          reject(error);
-        }
-      },
-      async () => {
-        try {
-          const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-          resolve(downloadURL);
-        } catch (e) {
-          reject(e);
-        }
-      }
-    );
-  });
-};
+// resilientUpload removido — upload agora é feito diretamente via supabase.storage nos services.
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {

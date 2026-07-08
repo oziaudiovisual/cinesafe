@@ -7,8 +7,7 @@ import { User, Ad, Contract, Equipment, Raffle, RaffleTicket } from '../types';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { supabase } from '../services/supabase';
 import { createPortal } from 'react-dom';
 
 const generateUUID = () => crypto.randomUUID();
@@ -73,21 +72,22 @@ export const AdminDashboard: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [allUsers, allAds, detailed, allContracts, stolenSnap, recoveredSnap] = await Promise.all([
+            const [allUsers, allAds, detailed, allContracts, stolenResult, recoveredResult, usersCountResult] = await Promise.all([
                 userService.getAllUsers(),
                 adService.getAllAds(),
                 userService.getGlobalDetailedStats(),
                 contractService.getAllContracts(),
-                getDocs(query(collection(db, 'equipment'), where('status', '==', 'STOLEN'))),
-                getDocs(collection(db, 'theft_history')),
+                supabase.from('equipment').select('*').eq('status', 'STOLEN'),
+                supabase.from('theft_history').select('*').order('recovery_date', { ascending: false }),
+                supabase.from('users').select('*', { count: 'exact', head: true }),
             ]);
-            const usersCount = (await getDocs(collection(db, 'users'))).size;
+            const usersCount = usersCountResult.count || 0;
             setUsers(allUsers);
             setAds(allAds);
             setGlobalStats({ users: usersCount, equipment: detailed.totalItems, stolen: detailed.stolenItems, value: detailed.totalValue, transactions: detailed.transactionsCount || 0 });
             setContracts(allContracts);
-            setStolen(stolenSnap.docs.map(d => d.data() as Equipment));
-            setRecovered(recoveredSnap.docs.map(d => d.data()).sort((a: any, b: any) => new Date(b.recoveryDate || 0).getTime() - new Date(a.recoveryDate || 0).getTime()));
+            setStolen((stolenResult.data || []).map((d: any) => ({ id: d.id, ownerId: d.owner_id, name: d.name, brand: d.brand, model: d.model, serialNumber: d.serial_number, category: d.category, status: d.status, value: d.value, isForRent: d.is_for_rent, isForSale: d.is_for_sale, imageUrl: d.image_url, purchaseDate: d.purchase_date, theftLocation: d.theft_location, theftDate: d.theft_date, theftAddress: d.theft_address, ownerProfile: d.owner_profile } as Equipment)));
+            setRecovered((recoveredResult.data || []).sort((a: any, b: any) => new Date(b.recovery_date || 0).getTime() - new Date(a.recovery_date || 0).getTime()));
         } catch (error) { console.error("Falha ao carregar dados do painel:", error); }
         finally { setLoading(false); }
     };

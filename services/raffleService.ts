@@ -1,45 +1,55 @@
 
-import { db, storage } from './firebase';
-import {
-  collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
-  query, where, getDocs, increment, writeBatch
-} from 'firebase/firestore';
+import { supabase } from './supabase';
 import { Raffle, RaffleTicket, User } from '../types';
 import { notificationService } from './notificationService';
-import { processImageForWebP, resilientUpload } from '../utils/imageProcessor';
+import { processImageForWebP } from '../utils/imageProcessor';
 
 const generateUUID = () => crypto.randomUUID();
+
+// --- Mappers ---
+const mapRaffleFromDb = (row: any): Raffle => ({
+  id: row.id, title: row.title, description: row.description,
+  prizeImageUrl: row.prize_image_url, status: row.status,
+  createdBy: row.created_by, startDate: row.start_date, endDate: row.end_date,
+  createdAt: row.created_at, updatedAt: row.updated_at,
+  winnerId: row.winner_id, winnerName: row.winner_name, winnerAvatar: row.winner_avatar,
+  drawnAt: row.drawn_at, totalTickets: row.total_tickets, totalParticipants: row.total_participants,
+});
+
+const mapTicketFromDb = (row: any): RaffleTicket => ({
+  id: row.id, raffleId: row.raffle_id, userId: row.user_id,
+  userName: row.user_name, userAvatar: row.user_avatar,
+  source: row.source, referredUserId: row.referred_user_id,
+  referredUserName: row.referred_user_name, createdAt: row.created_at,
+});
 
 export const raffleService = {
 
   // --- LEITURA ---
 
-  /**
-   * Retorna sorteios ativos cujo período ainda não acabou.
-   * Sorteio ativo = status 'active' E endDate >= hoje.
-   */
   getActiveRaffles: async (): Promise<Raffle[]> => {
     try {
-      const q = query(collection(db, 'raffles'), where('status', '==', 'active'));
-      const snap = await getDocs(q);
       const today = new Date().toISOString().slice(0, 10);
-      return snap.docs
-        .map(d => d.data() as Raffle)
-        .filter(r => r.endDate >= today)
-        .sort((a, b) => a.endDate.localeCompare(b.endDate));
+      const { data: rows } = await supabase
+        .from('raffles')
+        .select('*')
+        .eq('status', 'active')
+        .gte('end_date', today)
+        .order('end_date', { ascending: true });
+      return (rows || []).map(mapRaffleFromDb);
     } catch (e) {
       console.error('Erro ao buscar sorteios ativos:', e);
       return [];
     }
   },
 
-  /** Admin: todos os sorteios, ordenados por criação desc. */
   getAllRaffles: async (): Promise<Raffle[]> => {
     try {
-      const snap = await getDocs(collection(db, 'raffles'));
-      return snap.docs
-        .map(d => d.data() as Raffle)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const { data: rows } = await supabase
+        .from('raffles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      return (rows || []).map(mapRaffleFromDb);
     } catch (e) {
       console.error('Erro ao buscar todos os sorteios:', e);
       return [];
@@ -48,8 +58,8 @@ export const raffleService = {
 
   getRaffleById: async (raffleId: string): Promise<Raffle | null> => {
     try {
-      const snap = await getDoc(doc(db, 'raffles', raffleId));
-      return snap.exists() ? (snap.data() as Raffle) : null;
+      const { data: row } = await supabase.from('raffles').select('*').eq('id', raffleId).single();
+      return row ? mapRaffleFromDb(row) : null;
     } catch (e) {
       console.error('Erro ao buscar sorteio:', e);
       return null;
@@ -61,20 +71,20 @@ export const raffleService = {
   createRaffle: async (data: Omit<Raffle, 'id' | 'createdAt' | 'updatedAt' | 'totalTickets' | 'totalParticipants'>): Promise<Raffle | null> => {
     try {
       const now = new Date().toISOString();
-      const raffle: Raffle = {
-        id: generateUUID(),
-        ...data,
-        totalTickets: 0,
-        totalParticipants: 0,
-        createdAt: now,
-        updatedAt: now,
+      const id = generateUUID();
+      const dbRaffle: any = {
+        id, title: data.title, description: data.description || '',
+        status: data.status, created_by: data.createdBy,
+        start_date: data.startDate, end_date: data.endDate,
+        total_tickets: 0, total_participants: 0,
+        created_at: now, updated_at: now,
       };
-      // Remover campos undefined (Firestore rejeita)
-      const clean = Object.fromEntries(
-        Object.entries(raffle).filter(([, v]) => v !== undefined)
-      );
-      await setDoc(doc(db, 'raffles', raffle.id), clean);
-      return raffle;
+      if (data.prizeImageUrl) dbRaffle.prize_image_url = data.prizeImageUrl;
+      
+      const { error } = await supabase.from('raffles').insert(dbRaffle);
+      if (error) { console.error('Erro ao criar sorteio:', error); return null; }
+      
+      return { id, ...data, totalTickets: 0, totalParticipants: 0, createdAt: now, updatedAt: now } as Raffle;
     } catch (e) {
       console.error('Erro ao criar sorteio:', e);
       return null;
@@ -83,12 +93,22 @@ export const raffleService = {
 
   updateRaffle: async (raffleId: string, updates: Partial<Raffle>): Promise<boolean> => {
     try {
-      const clean = Object.fromEntries(
-        Object.entries({ ...updates, updatedAt: new Date().toISOString() })
-          .filter(([, v]) => v !== undefined)
-      );
-      await updateDoc(doc(db, 'raffles', raffleId), clean);
-      return true;
+      const dbUpdates: any = { updated_at: new Date().toISOString() };
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.prizeImageUrl !== undefined) dbUpdates.prize_image_url = updates.prizeImageUrl;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
+      if (updates.endDate !== undefined) dbUpdates.end_date = updates.endDate;
+      if (updates.winnerId !== undefined) dbUpdates.winner_id = updates.winnerId;
+      if (updates.winnerName !== undefined) dbUpdates.winner_name = updates.winnerName;
+      if (updates.winnerAvatar !== undefined) dbUpdates.winner_avatar = updates.winnerAvatar;
+      if (updates.drawnAt !== undefined) dbUpdates.drawn_at = updates.drawnAt;
+      if (updates.totalTickets !== undefined) dbUpdates.total_tickets = updates.totalTickets;
+      if (updates.totalParticipants !== undefined) dbUpdates.total_participants = updates.totalParticipants;
+
+      const { error } = await supabase.from('raffles').update(dbUpdates).eq('id', raffleId);
+      return !error;
     } catch (e) {
       console.error('Erro ao atualizar sorteio:', e);
       return false;
@@ -97,15 +117,9 @@ export const raffleService = {
 
   deleteRaffle: async (raffleId: string): Promise<boolean> => {
     try {
-      // Excluir tickets do sorteio primeiro
-      const ticketsSnap = await getDocs(
-        query(collection(db, 'raffle_tickets'), where('raffleId', '==', raffleId))
-      );
-      const batch = writeBatch(db);
-      ticketsSnap.docs.forEach(d => batch.delete(d.ref));
-      batch.delete(doc(db, 'raffles', raffleId));
-      await batch.commit();
-      return true;
+      // Tickets são deletados em cascata (FK ON DELETE CASCADE)
+      const { error } = await supabase.from('raffles').delete().eq('id', raffleId);
+      return !error;
     } catch (e) {
       console.error('Erro ao excluir sorteio:', e);
       return false;
@@ -114,58 +128,51 @@ export const raffleService = {
 
   // --- TICKETS ---
 
-  /** Todos os tickets de um sorteio. */
   getRaffleTickets: async (raffleId: string): Promise<RaffleTicket[]> => {
     try {
-      const q = query(collection(db, 'raffle_tickets'), where('raffleId', '==', raffleId));
-      const snap = await getDocs(q);
-      return snap.docs
-        .map(d => d.data() as RaffleTicket)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const { data: rows } = await supabase
+        .from('raffle_tickets')
+        .select('*')
+        .eq('raffle_id', raffleId)
+        .order('created_at', { ascending: false });
+      return (rows || []).map(mapTicketFromDb);
     } catch (e) {
       console.error('Erro ao buscar tickets:', e);
       return [];
     }
   },
 
-  /** Tickets de um usuário em um sorteio específico. */
   getUserTickets: async (raffleId: string, userId: string): Promise<RaffleTicket[]> => {
     try {
-      const q = query(
-        collection(db, 'raffle_tickets'),
-        where('raffleId', '==', raffleId),
-        where('userId', '==', userId)
-      );
-      const snap = await getDocs(q);
-      return snap.docs.map(d => d.data() as RaffleTicket);
+      const { data: rows } = await supabase
+        .from('raffle_tickets')
+        .select('*')
+        .eq('raffle_id', raffleId)
+        .eq('user_id', userId);
+      return (rows || []).map(mapTicketFromDb);
     } catch (e) {
       console.error('Erro ao buscar tickets do usuário:', e);
       return [];
     }
   },
 
-  /**
-   * Concede 1 ticket de cadastro (signup) ao usuário em um sorteio.
-   * Chamado automaticamente pelo fluxo de registro quando há sorteios ativos.
-   */
   grantSignupTicket: async (raffleId: string, user: User): Promise<boolean> => {
     try {
-      const ticket: RaffleTicket = {
-        id: generateUUID(),
-        raffleId,
-        userId: user.id,
-        userName: user.name,
-        userAvatar: user.avatarUrl,
-        source: 'signup',
-        createdAt: new Date().toISOString(),
+      const ticket: any = {
+        id: generateUUID(), raffle_id: raffleId,
+        user_id: user.id, user_name: user.name, user_avatar: user.avatarUrl,
+        source: 'signup', created_at: new Date().toISOString(),
       };
-      const batch = writeBatch(db);
-      batch.set(doc(db, 'raffle_tickets', ticket.id), ticket);
-      batch.update(doc(db, 'raffles', raffleId), {
-        totalTickets: increment(1),
-        totalParticipants: increment(1),
-      });
-      await batch.commit();
+      await supabase.from('raffle_tickets').insert(ticket);
+      
+      // Incrementar contadores
+      const { data: raffle } = await supabase.from('raffles').select('total_tickets, total_participants').eq('id', raffleId).single();
+      if (raffle) {
+        await supabase.from('raffles').update({
+          total_tickets: (raffle.total_tickets || 0) + 1,
+          total_participants: (raffle.total_participants || 0) + 1,
+        }).eq('id', raffleId);
+      }
       return true;
     } catch (e) {
       console.error('Erro ao conceder ticket de cadastro:', e);
@@ -173,39 +180,29 @@ export const raffleService = {
     }
   },
 
-  /**
-   * Concede 1 ticket de referral ao indicador em um sorteio.
-   * Chamado quando alguém se cadastra via link de convite de outro usuário.
-   */
   grantReferralTicket: async (
     raffleId: string,
     referrer: User,
     referredUser: { id: string; name: string }
   ): Promise<boolean> => {
     try {
-      // Verificar se o referrer já participa deste sorteio (para não incrementar totalParticipants novamente)
       const existingTickets = await raffleService.getUserTickets(raffleId, referrer.id);
       const isNewParticipant = existingTickets.length === 0;
 
-      const ticket: RaffleTicket = {
-        id: generateUUID(),
-        raffleId,
-        userId: referrer.id,
-        userName: referrer.name,
-        userAvatar: referrer.avatarUrl,
-        source: 'referral',
-        referredUserId: referredUser.id,
-        referredUserName: referredUser.name,
-        createdAt: new Date().toISOString(),
+      const ticket: any = {
+        id: generateUUID(), raffle_id: raffleId,
+        user_id: referrer.id, user_name: referrer.name, user_avatar: referrer.avatarUrl,
+        source: 'referral', referred_user_id: referredUser.id, referred_user_name: referredUser.name,
+        created_at: new Date().toISOString(),
       };
+      await supabase.from('raffle_tickets').insert(ticket);
 
-      const updates: Record<string, any> = { totalTickets: increment(1) };
-      if (isNewParticipant) updates.totalParticipants = increment(1);
-
-      const batch = writeBatch(db);
-      batch.set(doc(db, 'raffle_tickets', ticket.id), ticket);
-      batch.update(doc(db, 'raffles', raffleId), updates);
-      await batch.commit();
+      const { data: raffle } = await supabase.from('raffles').select('total_tickets, total_participants').eq('id', raffleId).single();
+      if (raffle) {
+        const updates: any = { total_tickets: (raffle.total_tickets || 0) + 1 };
+        if (isNewParticipant) updates.total_participants = (raffle.total_participants || 0) + 1;
+        await supabase.from('raffles').update(updates).eq('id', raffleId);
+      }
       return true;
     } catch (e) {
       console.error('Erro ao conceder ticket de referral:', e);
@@ -215,47 +212,31 @@ export const raffleService = {
 
   // --- SORTEIO ---
 
-  /**
-   * Realiza o sorteio: seleciona um vencedor aleatório ponderado pelo nº de tickets.
-   * Cada ticket = 1 entrada. Mais tickets = mais chances.
-   * Atualiza o raffle com o vencedor e cria notificação.
-   */
   drawWinner: async (raffleId: string): Promise<{ winnerId: string; winnerName: string } | null> => {
     try {
       const tickets = await raffleService.getRaffleTickets(raffleId);
       if (tickets.length === 0) return null;
 
-      // Sortear: cada ticket tem peso igual (1 entrada por ticket)
       const winnerIndex = Math.floor(Math.random() * tickets.length);
       const winningTicket = tickets[winnerIndex];
 
-      // Atualizar sorteio com o resultado
       const now = new Date().toISOString();
-      await updateDoc(doc(db, 'raffles', raffleId), {
-        winnerId: winningTicket.userId,
-        winnerName: winningTicket.userName,
-        winnerAvatar: winningTicket.userAvatar,
-        drawnAt: now,
-        status: 'completed',
-        updatedAt: now,
-      });
+      await supabase.from('raffles').update({
+        winner_id: winningTicket.userId, winner_name: winningTicket.userName,
+        winner_avatar: winningTicket.userAvatar, drawn_at: now,
+        status: 'completed', updated_at: now,
+      }).eq('id', raffleId);
 
-      // Buscar dados do sorteio para a notificação
       const raffle = await raffleService.getRaffleById(raffleId);
 
-      // Notificar o vencedor
       if (raffle) {
         await notificationService.createNotification({
           id: generateUUID(),
-          toUserId: winningTicket.userId,
-          fromUserId: raffle.createdBy,
-          fromUserName: 'Cine Safe',
-          type: 'RAFFLE_WINNER',
-          createdAt: now,
-          read: false,
+          toUserId: winningTicket.userId, fromUserId: raffle.createdBy,
+          fromUserName: 'Cine Safe', type: 'RAFFLE_WINNER',
+          createdAt: now, read: false,
           message: `🎉 Parabéns! Você ganhou o sorteio "${raffle.title}"! Entre em contato com a equipe para retirar seu prêmio.`,
-          itemName: raffle.title,
-          itemImage: raffle.prizeImageUrl,
+          itemName: raffle.title, itemImage: raffle.prizeImageUrl,
         });
       }
 
@@ -268,10 +249,6 @@ export const raffleService = {
 
   // --- LEADERBOARD ---
 
-  /**
-   * Top participantes de um sorteio por número de tickets.
-   * Retorna { userId, userName, userAvatar, ticketCount }[] ordenado desc.
-   */
   getRaffleLeaderboard: async (raffleId: string): Promise<
     { userId: string; userName: string; userAvatar: string; ticketCount: number }[]
   > => {
@@ -280,11 +257,8 @@ export const raffleService = {
       const map = new Map<string, { userName: string; userAvatar: string; count: number }>();
       for (const t of tickets) {
         const existing = map.get(t.userId);
-        if (existing) {
-          existing.count += 1;
-        } else {
-          map.set(t.userId, { userName: t.userName, userAvatar: t.userAvatar, count: 1 });
-        }
+        if (existing) { existing.count += 1; }
+        else { map.set(t.userId, { userName: t.userName, userAvatar: t.userAvatar, count: 1 }); }
       }
       return Array.from(map.entries())
         .map(([userId, data]) => ({ userId, userName: data.userName, userAvatar: data.userAvatar, ticketCount: data.count }))
@@ -300,9 +274,13 @@ export const raffleService = {
   uploadPrizeImage: async (file: File): Promise<string | null> => {
     try {
       const optimizedBlob = await processImageForWebP(file);
-      const fileName = `raffles/${Date.now()}_${generateUUID().slice(0, 8)}.webp`;
-      const storageRef = storage.ref(fileName);
-      return resilientUpload(storageRef, optimizedBlob);
+      const fileName = `${Date.now()}_${generateUUID().slice(0, 8)}.webp`;
+      const { error } = await supabase.storage.from('raffles').upload(fileName, optimizedBlob, {
+        contentType: 'image/webp',
+      });
+      if (error) { console.error('Raffle image upload error:', error); return null; }
+      const { data: { publicUrl } } = supabase.storage.from('raffles').getPublicUrl(fileName);
+      return publicUrl;
     } catch (e) {
       console.error('Erro ao fazer upload da imagem do prêmio:', e);
       return null;

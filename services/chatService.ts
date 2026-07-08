@@ -1,8 +1,4 @@
-import { db } from './firebase';
-import {
-  collection, doc, setDoc, addDoc, updateDoc, getDoc,
-  query, where, orderBy, onSnapshot
-} from 'firebase/firestore';
+import { supabase } from './supabase';
 import { User } from '../types';
 
 export interface ChatParticipant {
@@ -35,21 +31,20 @@ export const chatService = {
   // Garante que a conversa existe e devolve o id. Idempotente.
   openChat: async (me: User, other: { id: string; name: string; avatarUrl: string }): Promise<string> => {
     const id = chatIdFor(me.id, other.id);
-    const ref = doc(db, 'chats', id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
+    const { data: existing } = await supabase.from('chats').select('id').eq('id', id).single();
+    
+    if (!existing) {
       const now = new Date().toISOString();
-      await setDoc(ref, {
+      await supabase.from('chats').insert({
         id,
         participants: [me.id, other.id],
-        participantInfo: {
+        participant_info: {
           [me.id]: { name: me.name || 'Usuário', avatarUrl: me.avatarUrl || '' },
           [other.id]: { name: other.name || 'Usuário', avatarUrl: other.avatarUrl || '' },
         },
-        lastMessage: '',
-        lastMessageAt: now,
-        lastSenderId: '',
-        createdAt: now,
+        last_message: '',
+        last_message_at: now,
+        unread_count: {},
       });
     }
     return id;
@@ -60,8 +55,17 @@ export const chatService = {
     if (!clean) return false;
     try {
       const now = new Date().toISOString();
-      await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId, text: clean, createdAt: now });
-      await updateDoc(doc(db, 'chats', chatId), { lastMessage: clean, lastMessageAt: now, lastSenderId: senderId });
+      await supabase.from('chat_messages').insert({
+        chat_id: chatId,
+        sender_id: senderId,
+        sender_name: '',
+        text: clean,
+        created_at: now,
+      });
+      await supabase.from('chats').update({
+        last_message: clean,
+        last_message_at: now,
+      }).eq('id', chatId);
       return true;
     } catch (e) {
       console.error('sendMessage error:', e);
@@ -70,20 +74,65 @@ export const chatService = {
   },
 
   subscribeMessages: (chatId: string, cb: (msgs: ChatMessage[]) => void) => {
-    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'));
-    return onSnapshot(q, snap => {
-      cb(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<ChatMessage, 'id'>) })));
-    }, () => cb([]));
+    // Carga inicial
+    const loadMessages = async () => {
+      const { data: rows } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+      cb((rows || []).map((d: any) => ({
+        id: d.id,
+        senderId: d.sender_id,
+        text: d.text,
+        createdAt: d.created_at,
+      })));
+    };
+    loadMessages();
+
+    const channel = supabase
+      .channel(`messages:${chatId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `chat_id=eq.${chatId}`,
+      }, () => { loadMessages(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   },
 
-  // Conversas do usuário. Ordena no cliente por recência (evita índice composto).
+  // Conversas do usuário. Ordena no cliente por recência.
   subscribeUserChats: (userId: string, cb: (chats: ChatSummary[]) => void) => {
-    const q = query(collection(db, 'chats'), where('participants', 'array-contains', userId));
-    return onSnapshot(q, snap => {
-      const list = snap.docs
-        .map(d => d.data() as ChatSummary)
-        .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    const loadChats = async () => {
+      const { data: rows } = await supabase
+        .from('chats')
+        .select('*')
+        .contains('participants', [userId])
+        .order('last_message_at', { ascending: false });
+      
+      const list = (rows || []).map((d: any) => ({
+        id: d.id,
+        participants: d.participants,
+        participantInfo: d.participant_info || {},
+        lastMessage: d.last_message,
+        lastMessageAt: d.last_message_at,
+        lastSenderId: '',
+      }));
       cb(list);
-    }, () => cb([]));
+    };
+    loadChats();
+
+    const channel = supabase
+      .channel(`chats:${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'chats',
+      }, () => { loadChats(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   },
 };

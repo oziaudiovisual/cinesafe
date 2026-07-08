@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../types';
 import { AuthService } from '../services/auth';
 import { userService } from '../services/userService';
+import { supabase } from '../services/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -21,7 +22,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Check for active session on startup
     const initAuth = async () => {
-      // StorageService.init() removed as it is no longer needed
       const sessionUser = await AuthService.getSession();
       if (sessionUser && sessionUser.isBlocked) {
           await AuthService.logout();
@@ -32,6 +32,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     };
     initAuth();
+
+    // Escuta mudanças de sessão em tempo real (Supabase Auth)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+      } else if (session?.user && event === 'SIGNED_IN') {
+        const profile = await userService.getUserProfile(session.user.id);
+        if (profile && profile.isBlocked) {
+          await AuthService.logout();
+          setUser(null);
+        } else {
+          setUser(profile);
+        }
+      }
+    });
+
+    return () => { subscription.unsubscribe(); };
   }, []);
 
   const login = async (email: string, pass: string) => {
@@ -65,7 +82,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
     if (user) {
-        // This will now trigger the dynamic score calculation in getUserProfile
         const updatedUser = await userService.getUserProfile(user.id);
         if (updatedUser) setUser(updatedUser);
     }

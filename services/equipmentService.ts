@@ -1,46 +1,86 @@
 
-import { db, storage } from './firebase';
-import {
-  collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
-  query, where, getDocs, writeBatch, increment,
-  limit, startAfter, orderBy, QueryConstraint, DocumentData, QueryDocumentSnapshot
-} from 'firebase/firestore';
+import { supabase } from './supabase';
 import { Equipment, EquipmentStatus, MarketplaceFilters } from '../types';
 import { userService } from './userService';
-import { processImageForWebP, resilientUpload } from '../utils/imageProcessor';
+import { processImageForWebP } from '../utils/imageProcessor';
 
-// --- Equipment Service Logic ---
+// --- Mapper ---
+const mapFromDb = (row: any): Equipment => ({
+  id: row.id,
+  ownerId: row.owner_id,
+  name: row.name,
+  brand: row.brand,
+  model: row.model,
+  serialNumber: row.serial_number,
+  category: row.category,
+  status: row.status,
+  value: row.value ? Number(row.value) : undefined,
+  isForRent: row.is_for_rent,
+  rentalPricePerDay: row.rental_price_per_day ? Number(row.rental_price_per_day) : undefined,
+  isForSale: row.is_for_sale,
+  salePrice: row.sale_price ? Number(row.sale_price) : undefined,
+  imageUrl: row.image_url,
+  invoiceUrl: row.invoice_url,
+  description: row.description,
+  purchaseDate: row.purchase_date,
+  theftLocation: row.theft_location,
+  theftDate: row.theft_date,
+  theftAddress: row.theft_address,
+  pendingTransferTo: row.pending_transfer_to,
+  ownerProfile: row.owner_profile,
+});
+
+const mapToDb = (item: Equipment): any => ({
+  id: item.id,
+  owner_id: item.ownerId,
+  name: item.name,
+  brand: item.brand,
+  model: item.model,
+  serial_number: String(item.serialNumber || '').trim().toUpperCase(),
+  category: item.category,
+  status: item.status,
+  value: item.value,
+  is_for_rent: item.isForRent,
+  rental_price_per_day: item.rentalPricePerDay,
+  is_for_sale: item.isForSale,
+  sale_price: item.salePrice,
+  image_url: item.imageUrl,
+  invoice_url: item.invoiceUrl,
+  description: item.description,
+  purchase_date: item.purchaseDate,
+  theft_location: item.theftLocation,
+  theft_date: item.theftDate,
+  theft_address: item.theftAddress,
+  pending_transfer_to: item.pendingTransferTo,
+  owner_profile: item.ownerProfile,
+});
+
+// Cursor de paginação: string ID em vez de QueryDocumentSnapshot
 export const equipmentService = {
   getUserEquipment: async (userId: string): Promise<Equipment[]> => {
-    const q = query(collection(db, 'equipment'), where('ownerId', '==', userId));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => d.data() as Equipment);
+    const { data } = await supabase.from('equipment').select('*').eq('owner_id', userId);
+    return (data || []).map(mapFromDb);
   },
 
   addEquipment: async (item: Equipment) => {
-    // Data Denormalization: Fetch owner profile to store directly on equipment doc
     const ownerProfile = await userService.getUserProfile(item.ownerId);
-
     const itemWithProfile: Equipment = {
       ...item,
-      // Normaliza o serial (maiúsculas + sem espaços) para verificação consistente.
       serialNumber: String(item.serialNumber || '').trim().toUpperCase(),
-      // NÃO denormaliza o telefone no item: a vitrine é pública e o telefone
-      // vazaria. O contato acontece via notificação (fromUserPhone).
       ownerProfile: ownerProfile ? {
         name: ownerProfile.name,
         avatarUrl: ownerProfile.avatarUrl,
         location: ownerProfile.location
       } : undefined
     };
-
-    await setDoc(doc(db, 'equipment', item.id), itemWithProfile);
+    const dbItem = mapToDb(itemWithProfile);
+    // Remove undefined values
+    const clean = Object.fromEntries(Object.entries(dbItem).filter(([, v]) => v !== undefined));
+    await supabase.from('equipment').upsert(clean);
   },
 
   updateEquipment: async (updatedItem: Equipment) => {
-    // Ensure profile data is fresh/present on update if available
     let dataToSave = { ...updatedItem };
-    // Mantém o serial normalizado também na edição (consistente com addEquipment/checkSerial).
     dataToSave.serialNumber = String(updatedItem.serialNumber || '').trim().toUpperCase();
 
     if (!dataToSave.ownerProfile) {
@@ -53,58 +93,55 @@ export const equipmentService = {
         };
       }
     }
-
-    await updateDoc(doc(db, 'equipment', updatedItem.id), dataToSave);
+    const dbItem = mapToDb(dataToSave);
+    const clean = Object.fromEntries(Object.entries(dbItem).filter(([, v]) => v !== undefined));
+    await supabase.from('equipment').update(clean).eq('id', updatedItem.id);
   },
 
   recoverEquipment: async (item: Equipment, recoveredViaApp: boolean = false): Promise<boolean> => {
     try {
-      await setDoc(doc(collection(db, 'theft_history')), {
-        equipmentId: item.id, ownerId: item.ownerId, theftDate: item.theftDate,
-        theftLat: item.theftLocation?.lat, theftLng: item.theftLocation?.lng,
-        theftAddress: item.theftAddress, equipmentValue: item.value || 0,
-        recoveryDate: new Date().toISOString(), recoveredViaApp: recoveredViaApp
+      await supabase.from('theft_history').insert({
+        equipment_id: item.id, owner_id: item.ownerId, theft_date: item.theftDate,
+        theft_location: item.theftLocation,
+        theft_address: item.theftAddress, equipment_value: item.value || 0,
+        recovery_date: new Date().toISOString(), recovered_via_app: recoveredViaApp,
+        equipment_name: item.name,
       });
-      await updateDoc(doc(db, 'equipment', item.id), {
-        status: EquipmentStatus.SAFE, theftDate: null, theftLocation: null, theftAddress: null
-      });
+      await supabase.from('equipment').update({
+        status: EquipmentStatus.SAFE, theft_date: null, theft_location: null, theft_address: null
+      }).eq('id', item.id);
       return true;
     } catch (e) { return false; }
   },
 
   deleteEquipment: async (id: string): Promise<boolean> => {
     try {
-      await deleteDoc(doc(db, 'equipment', id));
-      return true;
+      const { error } = await supabase.from('equipment').delete().eq('id', id);
+      return !error;
     } catch (e) { return false; }
   },
 
   checkSerial: async (serial: string): Promise<Equipment | undefined> => {
     try {
       if (!serial) return undefined;
-      const trimmed = String(serial).trim();
-      const upper = trimmed.toUpperCase();
-      // Tenta o valor normalizado (docs novos) e, se não achar, o cru (docs legados
-      // que ainda não foram normalizados) — evita regressão na verificação de serial.
-      const candidates = upper === trimmed ? [upper] : [upper, trimmed];
-
-      for (const value of candidates) {
-        const q = query(collection(db, 'equipment'), where('serialNumber', '==', value));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const item = snap.docs[0].data() as Equipment;
-          // Refresh profile on check to be safe, though likely denormalized data is enough
-          if (!item.ownerProfile) {
-            const owner = await userService.getUserProfile(item.ownerId);
-            if (owner) {
-              item.ownerProfile = {
-                name: owner.name, avatarUrl: owner.avatarUrl,
-                location: owner.location
-              };
-            }
+      const upper = String(serial).trim().toUpperCase();
+      
+      // PostgreSQL: busca case-insensitive nativa
+      const { data } = await supabase
+        .from('equipment')
+        .select('*')
+        .ilike('serial_number', upper)
+        .limit(1);
+      
+      if (data && data.length > 0) {
+        const item = mapFromDb(data[0]);
+        if (!item.ownerProfile) {
+          const owner = await userService.getUserProfile(item.ownerId);
+          if (owner) {
+            item.ownerProfile = { name: owner.name, avatarUrl: owner.avatarUrl, location: owner.location };
           }
-          return item;
         }
+        return item;
       }
       return undefined;
     } catch (e) { return undefined; }
@@ -112,64 +149,41 @@ export const equipmentService = {
 
   _getMarketplaceItems: async (
     filterField: string,
-    lastDoc: QueryDocumentSnapshot<DocumentData> | null,
+    lastDoc: string | null,  // Agora é string (ID do último item) em vez de QueryDocumentSnapshot
     limitCount: number,
     filters: MarketplaceFilters
-  ): Promise<{ data: Equipment[], lastDoc: QueryDocumentSnapshot<DocumentData> | null, hasMore: boolean }> => {
+  ): Promise<{ data: Equipment[], lastDoc: string | null, hasMore: boolean }> => {
+    let query = supabase
+      .from('equipment')
+      .select('*')
+      .eq(filterField === 'isForRent' ? 'is_for_rent' : 'is_for_sale', true)
+      .eq('status', 'SAFE')
+      .order('id');
 
-    // 1. Build Query Constraints
-    const constraints: QueryConstraint[] = [
-      where(filterField, '==', true),
-      where('status', '==', 'SAFE'),
-      // Order by ID is required for consistent pagination if we don't have a specific sort field like createdAt
-      // In a production app, we should add 'createdAt' to Equipment and order by that.
-      // using documentId() or a field that exists is crucial for startAfter.
-      orderBy('id')
-    ];
-
-    // 2. Apply Server-Side Filters (Exact matches only)
     if (filters.category) {
-      constraints.push(where('category', '==', filters.category));
+      query = query.eq('category', filters.category);
     }
 
-    // 3. Pagination Constraints
     if (lastDoc) {
-      constraints.push(startAfter(lastDoc));
+      query = query.gt('id', lastDoc);
     }
 
-    // Fetch one extra to determine hasMore without a second query count
-    constraints.push(limit(limitCount + 1));
+    query = query.limit(limitCount + 1);
 
-    // 4. Execute Query
-    const q = query(collection(db, 'equipment'), ...constraints);
-    const snap = await getDocs(q);
+    const { data: rows } = await query;
+    const allItems = (rows || []).map(mapFromDb);
+    const hasMore = allItems.length > limitCount;
+    const items = hasMore ? allItems.slice(0, limitCount) : allItems;
+    const newLastDoc = items.length > 0 ? items[items.length - 1].id : null;
 
-    // 5. Process Results
-    const allDocs = snap.docs;
-    const hasMore = allDocs.length > limitCount;
-
-    // If we fetched limit + 1, remove the last one from the data result
-    const docsToReturn = hasMore ? allDocs.slice(0, limitCount) : allDocs;
-    const newLastDoc = docsToReturn.length > 0 ? docsToReturn[docsToReturn.length - 1] : null;
-
-    let items = docsToReturn.map(d => d.data() as Equipment);
-
-    // 6. Apply "Soft" Filters for Location (Optimization: O(N) only on the page size, not DB)
-    // Since Firestore doesn't support full-text search or "contains" for location efficiently 
-    // without third-party tools (Algolia/Typesense), we filter the page results.
-    // NOTE: This might result in pages with fewer than 'limit' items, but preserves architecture.
+    // Filtro de localização no cliente (como antes)
+    let filtered = items;
     if (filters.uf || filters.city) {
       const searchLoc = (filters.city || filters.uf || '').toLowerCase();
-      items = items.filter(item => {
-        return item.ownerProfile?.location?.toLowerCase().includes(searchLoc);
-      });
+      filtered = items.filter(item => item.ownerProfile?.location?.toLowerCase().includes(searchLoc));
     }
 
-    return {
-      data: items,
-      lastDoc: newLastDoc,
-      hasMore: hasMore
-    };
+    return { data: filtered, lastDoc: newLastDoc, hasMore };
   },
 
   getRentalsPaginated: async (lastDoc: any, limit: number, filters: MarketplaceFilters) => {
@@ -180,24 +194,22 @@ export const equipmentService = {
     return equipmentService._getMarketplaceItems('isForSale', lastDoc, limit, filters);
   },
 
-  // Busca textual por trecho (substring, case-insensitive) sobre um lote do
-  // marketplace. Sem serviço externo e sem migração: funciona em todos os itens.
-  // Limitação: cobre os primeiros ~120 itens do filtro (suficiente enquanto o
-  // catálogo é pequeno; acima disso, migrar para full-text externo).
   searchMarketplace: async (
     filterField: 'isForRent' | 'isForSale',
     queryText: string,
     filters: MarketplaceFilters = {}
   ): Promise<Equipment[]> => {
-    const q = query(
-      collection(db, 'equipment'),
-      where(filterField, '==', true),
-      where('status', '==', 'SAFE'),
-      orderBy('id'),
-      limit(120)
-    );
-    const snap = await getDocs(q);
-    let items = snap.docs.map(d => d.data() as Equipment);
+    const dbField = filterField === 'isForRent' ? 'is_for_rent' : 'is_for_sale';
+    let query = supabase
+      .from('equipment')
+      .select('*')
+      .eq(dbField, true)
+      .eq('status', 'SAFE')
+      .order('id')
+      .limit(120);
+
+    const { data: rows } = await query;
+    let items = (rows || []).map(mapFromDb);
 
     const needle = (queryText || '').trim().toLowerCase();
     if (needle) {
@@ -214,65 +226,74 @@ export const equipmentService = {
   },
 
   uploadEquipmentImage: async (file: File, ownerId: string): Promise<string | null> => {
-    const optimizedBlob = await processImageForWebP(file);
-    const fileName = `users/${ownerId}/equipment/${Date.now()}.webp`;
-    const storageRef = storage.ref(fileName);
-    return resilientUpload(storageRef, optimizedBlob);
+    try {
+      const optimizedBlob = await processImageForWebP(file);
+      const fileName = `${ownerId}/${Date.now()}.webp`;
+      const { error } = await supabase.storage.from('equipment').upload(fileName, optimizedBlob, {
+        contentType: 'image/webp',
+      });
+      if (error) { console.error('Equipment image upload error:', error); return null; }
+      const { data: { publicUrl } } = supabase.storage.from('equipment').getPublicUrl(fileName);
+      return publicUrl;
+    } catch (e) { console.error('uploadEquipmentImage error:', e); return null; }
   },
 
   uploadInvoiceImage: async (file: File, ownerId: string, equipmentId: string): Promise<string | null> => {
-    // PDFs vão direto (o pipeline WebP só lida com imagem e quebraria com PDF).
-    const isPdf = file.type === 'application/pdf';
-    const blob: Blob = isPdf ? file : await processImageForWebP(file);
-    const ext = isPdf ? 'pdf' : 'webp';
-    const fileName = `users/${ownerId}/invoices/${equipmentId}_${Date.now()}.${ext}`;
-    const storageRef = storage.ref(fileName);
-    return resilientUpload(storageRef, blob);
+    try {
+      const isPdf = file.type === 'application/pdf';
+      const blob: Blob = isPdf ? file : await processImageForWebP(file);
+      const ext = isPdf ? 'pdf' : 'webp';
+      const fileName = `${ownerId}/${equipmentId}_${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('invoices').upload(fileName, blob, {
+        contentType: isPdf ? 'application/pdf' : 'image/webp',
+      });
+      if (error) { console.error('Invoice upload error:', error); return null; }
+      const { data: { publicUrl } } = supabase.storage.from('invoices').getPublicUrl(fileName);
+      return publicUrl;
+    } catch (e) { console.error('uploadInvoiceImage error:', e); return null; }
   },
 
   transferEquipmentOwnership: async (itemId: string, newOwnerId: string, transactionValue?: number): Promise<boolean> => {
     try {
-      const itemDoc = await getDoc(doc(db, 'equipment', itemId));
-      if (!itemDoc.exists()) return false;
-      const item = itemDoc.data() as Equipment;
+      const { data: itemRow } = await supabase.from('equipment').select('*').eq('id', itemId).single();
+      if (!itemRow) return false;
+      const item = mapFromDb(itemRow);
 
-      const batch = writeBatch(db);
-
-      // Update Equipment: Change Owner, Reset Status, Clear Pending
-      const eqRef = doc(db, 'equipment', itemId);
-
-      // We must also fetch the NEW owner profile to update the denormalized data immediately
       const newOwnerProfile = await userService.getUserProfile(newOwnerId);
 
       const updatePayload: any = {
-        ownerId: newOwnerId,
+        owner_id: newOwnerId,
         status: EquipmentStatus.SAFE,
-        pendingTransferTo: null,
-        // Chega ao novo dono fora do marketplace (ele decide se re-anuncia).
-        isForRent: false,
-        isForSale: false,
-        ownerProfile: newOwnerProfile ? {
+        pending_transfer_to: null,
+        is_for_rent: false,
+        is_for_sale: false,
+        owner_profile: newOwnerProfile ? {
           name: newOwnerProfile.name,
           avatarUrl: newOwnerProfile.avatarUrl,
           location: newOwnerProfile.location
         } : null
       };
-
       if (transactionValue && transactionValue > 0) {
         updatePayload.value = transactionValue;
       }
-      batch.update(eqRef, updatePayload);
+      await supabase.from('equipment').update(updatePayload).eq('id', itemId);
 
       // Update Transaction History
       if (transactionValue && transactionValue > 0) {
-        const sellerRef = doc(db, 'users', item.ownerId);
-        const buyerRef = doc(db, 'users', newOwnerId);
-
-        batch.update(sellerRef, { [`transactionHistory.${newOwnerId}`]: increment(transactionValue) });
-        batch.update(buyerRef, { [`transactionHistory.${item.ownerId}`]: increment(transactionValue) });
+        // Seller
+        const { data: seller } = await supabase.from('users').select('transaction_history').eq('id', item.ownerId).single();
+        if (seller) {
+          const sellerHist = { ...(seller.transaction_history || {}), [newOwnerId]: ((seller.transaction_history || {})[newOwnerId] || 0) + transactionValue };
+          await supabase.from('users').update({ transaction_history: sellerHist }).eq('id', item.ownerId);
+        }
+        // Buyer
+        const { data: buyer } = await supabase.from('users').select('transaction_history').eq('id', newOwnerId).single();
+        if (buyer) {
+          const buyerHist = { ...(buyer.transaction_history || {}), [item.ownerId]: ((buyer.transaction_history || {})[item.ownerId] || 0) + transactionValue };
+          await supabase.from('users').update({ transaction_history: buyerHist }).eq('id', newOwnerId);
+        }
       }
 
-      await batch.commit();
       return true;
     } catch (e) {
       console.error("Transfer Error:", e);
@@ -282,11 +303,10 @@ export const equipmentService = {
 
   cancelTransfer: async (equipmentId: string): Promise<boolean> => {
     try {
-      // Note: Notification cleanup must be handled by the recipient when they view it.
-      // We cannot query notifications by itemId due to security rules (toUserId only).
-      const equipmentDocRef = doc(db, 'equipment', equipmentId);
-      await updateDoc(equipmentDocRef, { status: EquipmentStatus.SAFE, pendingTransferTo: null });
-      return true;
+      const { error } = await supabase.from('equipment').update({
+        status: EquipmentStatus.SAFE, pending_transfer_to: null
+      }).eq('id', equipmentId);
+      return !error;
     } catch (e) { return false; }
   },
 };

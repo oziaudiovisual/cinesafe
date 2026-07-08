@@ -10,14 +10,13 @@ import { useAuth } from '../context/AuthContext';
 import { ReferralModal } from '../components/ReferralModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UserAvatar } from '../components/UserAvatar';
-import { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 
 export const Sales: React.FC = () => {
     const { user } = useAuth();
     const [items, setItems] = useState<Equipment[]>([]);
     
-    // Pagination State
-    const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    // Pagination State — agora usa string (ID do último item)
+    const [lastDoc, setLastDoc] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(true);
 
     const [isFetching, setIsFetching] = useState(false);
