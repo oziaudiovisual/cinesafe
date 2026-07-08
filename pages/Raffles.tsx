@@ -144,10 +144,10 @@ export const Raffles: React.FC = () => {
 
             <div className="relative z-10 p-5 md:p-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* Coluna esquerda (50%): Imagem + Info + Countdown */}
-                <div className="flex gap-4 items-start">
-                  {/* Imagem do prêmio */}
-                  <div className="w-28 h-28 md:w-36 md:h-36 rounded-2xl bg-black/30 border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                {/* Coluna esquerda (50%): Imagem + Info + Countdown — preenchendo tudo */}
+                <div className="flex gap-5 items-stretch h-full">
+                  {/* Imagem do prêmio — ocupa toda a altura */}
+                  <div className="w-36 md:w-44 rounded-2xl bg-black/30 border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
                     {selectedRaffle.prizeImageUrl ? (
                       <img
                         src={selectedRaffle.prizeImageUrl}
@@ -155,34 +155,36 @@ export const Raffles: React.FC = () => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Icons.Gift className="w-14 h-14 text-accent-primary/40" />
+                      <Icons.Gift className="w-16 h-16 text-accent-primary/40" />
                     )}
                   </div>
 
                   {/* Info + Countdown */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                        isCompleted
-                          ? 'bg-green-500/20 text-green-400 border border-green-500/20'
-                          : 'bg-accent-primary/20 text-accent-primary border border-accent-primary/20'
-                      }`}>
-                        {isCompleted ? '✨ Realizado' : '🎯 Sorteio Ativo'}
-                      </span>
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
+                          isCompleted
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/20'
+                            : 'bg-accent-primary/20 text-accent-primary border border-accent-primary/20'
+                        }`}>
+                          {isCompleted ? '✨ Realizado' : '🎯 Sorteio Ativo'}
+                        </span>
+                      </div>
+                      <h2 className="text-2xl md:text-3xl font-extrabold text-white leading-tight mb-1">
+                        {selectedRaffle.title}
+                      </h2>
+                      <p className="text-brand-300 text-sm mb-4 line-clamp-2">
+                        {selectedRaffle.description}
+                      </p>
                     </div>
-                    <h2 className="text-xl md:text-2xl font-extrabold text-white leading-tight">
-                      {selectedRaffle.title}
-                    </h2>
-                    <p className="text-brand-400 text-xs mb-3 line-clamp-2">
-                      {selectedRaffle.description}
-                    </p>
 
                     {!isCompleted && (
-                      <RaffleCountdown endDate={selectedRaffle.endDate} compact />
+                      <RaffleCountdown endDate={selectedRaffle.endDate} />
                     )}
 
                     {isCompleted && selectedRaffle.winnerName && (
-                      <div className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 ${
+                      <div className={`inline-flex items-center gap-3 rounded-xl px-4 py-2.5 ${
                         isWinner
                           ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30'
                           : 'bg-white/5 border border-white/10'
@@ -190,13 +192,13 @@ export const Raffles: React.FC = () => {
                         <img
                           src={selectedRaffle.winnerAvatar || ''}
                           alt={selectedRaffle.winnerName}
-                          className="w-8 h-8 rounded-full object-cover border-2 border-yellow-500"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-yellow-500"
                         />
                         <div>
-                          <span className="text-yellow-400 text-[10px] font-bold uppercase tracking-wider block">
+                          <span className="text-yellow-400 text-xs font-bold uppercase tracking-wider block">
                             🏆 Vencedor
                           </span>
-                          <span className="text-white font-bold text-sm">
+                          <span className="text-white font-bold">
                             {isWinner ? 'Você! 🎉' : selectedRaffle.winnerName}
                           </span>
                         </div>
