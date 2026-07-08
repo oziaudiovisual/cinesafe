@@ -23,6 +23,7 @@ const Notifications = lazy(() => import('./pages/Notifications').then(module => 
 const Network = lazy(() => import('./pages/Network').then(module => ({ default: module.Network })));
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
 const Chat = lazy(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
+const Contracts = lazy(() => import('./pages/Contracts').then(module => ({ default: module.Contracts })));
 
 // Loading Component
 const PageLoader = () => (
@@ -85,6 +86,7 @@ function App() {
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+            <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
 
             {/* Admin Route */}
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />

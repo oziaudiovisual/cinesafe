@@ -60,7 +60,15 @@ service cloud.firestore {
                     || (isSignedIn()
                         && resource.data.status == 'TRANSFER_PENDING'
                         && resource.data.pendingTransferTo == request.auth.uid
-                        && request.resource.data.ownerId == request.auth.uid);
+                        && request.resource.data.ownerId == request.auth.uid)
+                    // Destinatário RECUSA a transferência: devolve o item ao SAFE
+                    // (sem trocar de dono), tirando o pendingTransferTo.
+                    || (isSignedIn()
+                        && resource.data.status == 'TRANSFER_PENDING'
+                        && resource.data.pendingTransferTo == request.auth.uid
+                        && request.resource.data.status == 'SAFE'
+                        && request.resource.data.ownerId == resource.data.ownerId
+                        && request.resource.data.get('pendingTransferTo', null) == null);
 
       allow delete: if isOwner(resource.data.ownerId) || isAdmin();
     }
@@ -107,6 +115,17 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         allow update, delete: if false;
       }
+    }
+
+    // ---- CONTRACTS ---- (contratos de aluguel/venda: só as duas partes acessam)
+    match /contracts/{contractId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.parties;
+      // O dono do equipamento cria a proposta (assina como ownerId e está nas partes).
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.ownerId
+        && request.auth.uid in request.resource.data.parties;
+      allow update: if isSignedIn() && request.auth.uid in resource.data.parties;
+      allow delete: if false;
     }
   }
 }

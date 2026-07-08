@@ -248,6 +248,9 @@ export const equipmentService = {
         ownerId: newOwnerId,
         status: EquipmentStatus.SAFE,
         pendingTransferTo: null,
+        // Chega ao novo dono fora do marketplace (ele decide se re-anuncia).
+        isForRent: false,
+        isForSale: false,
         ownerProfile: newOwnerProfile ? {
           name: newOwnerProfile.name,
           avatarUrl: newOwnerProfile.avatarUrl,

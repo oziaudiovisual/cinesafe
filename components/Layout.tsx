@@ -22,6 +22,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
     { to: '/', label: 'Início', icon: Icons.Home },
     { to: '/notifications', label: 'Notificações', icon: Icons.MessageCircle },
     { to: '/chat', label: 'Mensagens', icon: Icons.Mail },
+    { to: '/contracts', label: 'Contratos', icon: Icons.FileText },
     { to: '/network', label: 'Minha Rede', icon: Icons.Users },
     { to: '/inventory', label: 'Inventário', icon: Icons.Camera },
     { to: '/rentals', label: 'Alugar', icon: Icons.ShoppingBag },

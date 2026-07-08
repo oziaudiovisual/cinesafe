@@ -139,6 +139,31 @@ export interface RentalListing {
   distance: string; // Mocked distance
 }
 
+export type ContractType = 'rental' | 'sale';
+export type ContractStatus = 'proposed' | 'active' | 'completed' | 'declined' | 'cancelled';
+
+export interface Contract {
+  id: string;
+  type: ContractType;
+  status: ContractStatus;
+  parties: string[]; // [ownerId, counterpartyId] — para query e regras
+  ownerId: string;   // dono do equipamento (locador/vendedor), cria o contrato
+  ownerName: string;
+  ownerAvatar: string;
+  counterpartyId: string; // locatário/comprador, aceita
+  counterpartyName: string;
+  counterpartyAvatar: string;
+  equipmentId: string;
+  equipmentName: string;
+  equipmentImage?: string;
+  value: number;        // aluguel: valor total do período; venda: preço
+  pickupDate?: string;  // aluguel: dia da retirada (ISO date)
+  returnDate?: string;  // aluguel: dia da devolução (ISO date)
+  chatId?: string;      // liga o contrato à conversa
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Ad {
   id: string;
   advertiserName: string; // Used for "Brand" or internal name

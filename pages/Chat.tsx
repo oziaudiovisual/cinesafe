@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { chatService, ChatSummary, ChatMessage } from '../services/chatService';
+import { ContractModal } from '../components/ContractModal';
 import { Icons } from '../components/Icons';
 
 export const Chat: React.FC = () => {
@@ -12,6 +13,7 @@ export const Chat: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [contractOpen, setContractOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   // Lista de conversas em tempo real.
@@ -102,6 +104,9 @@ export const Chat: React.FC = () => {
                 {(() => { const o = otherOf(selectedChat); return o.avatarUrl ? <img src={o.avatarUrl} alt={o.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-brand-400"><Icons.User className="w-5 h-5" /></div>; })()}
               </div>
               <p className="font-bold text-white">{otherOf(selectedChat).name}</p>
+              <button onClick={() => setContractOpen(true)} className="ml-auto text-xs font-bold bg-accent-primary/15 hover:bg-accent-primary/25 text-accent-primary px-3 py-2 rounded-lg border border-accent-primary/20 flex items-center gap-2 transition-colors">
+                <Icons.FileText className="w-4 h-4" /> <span className="hidden sm:inline">Fechar negócio</span>
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
@@ -134,6 +139,17 @@ export const Chat: React.FC = () => {
           </>
         )}
       </div>
+
+      {contractOpen && selectedChat && (
+        <ContractModal
+          isOpen={contractOpen}
+          onClose={() => setContractOpen(false)}
+          owner={user}
+          counterparty={{ id: otherOf(selectedChat).uid, name: otherOf(selectedChat).name, avatarUrl: otherOf(selectedChat).avatarUrl }}
+          chatId={selectedChat.id}
+          onCreated={(summary) => { chatService.sendMessage(selectedChat.id, user.id, summary); }}
+        />
+      )}
     </div>
   );
 };
