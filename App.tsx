@@ -7,17 +7,29 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Carrega uma página em chunk separado. Se o chunk falhar (deploy novo trocou os
 // hashes, ou service worker/CDN servindo HTML antigo), recarrega a página UMA vez
-// para pegar o index.html + chunks atuais. Se falhar de novo logo em seguida,
-// deixa o ErrorBoundary mostrar uma tela amigável — nunca uma tela preta.
+// para pegar o index.html + chunks atuais. Nunca mostra tela de erro ao usuário.
 const lazyWithReload = (factory: () => Promise<{ default: React.ComponentType<any> }>) =>
   lazy(() =>
     factory().catch((err: unknown) => {
-      const now = Date.now();
-      const last = Number(sessionStorage.getItem('chunkReloadAt') || '0');
-      if (now - last > 10000) {
-        sessionStorage.setItem('chunkReloadAt', String(now));
-        window.location.reload();
-        return new Promise<{ default: React.ComponentType<any> }>(() => {});
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isChunkError = errMsg.includes('Failed to fetch dynamically imported module')
+        || errMsg.includes('Loading chunk')
+        || errMsg.includes('Loading CSS chunk')
+        || errMsg.includes('text/html')
+        || errMsg.includes('Importing a module script failed');
+
+      if (isChunkError) {
+        const key = 'chunkReloadAt';
+        const now = Date.now();
+        const last = Number(sessionStorage.getItem(key) || '0');
+        // Permite reload a cada 30s para evitar loop infinito
+        if (now - last > 30000) {
+          sessionStorage.setItem(key, String(now));
+          // Force reload sem cache
+          window.location.reload();
+          // Retorna promise que nunca resolve (a página vai recarregar)
+          return new Promise<{ default: React.ComponentType<any> }>(() => {});
+        }
       }
       throw err;
     })
