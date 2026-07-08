@@ -74,21 +74,21 @@ export const RaffleCountdown: React.FC<RaffleCountdownProps> = ({ endDate, compa
   ];
 
   return (
-    <div className="flex items-center gap-3 justify-center">
+    <div className="flex items-center gap-2">
       {blocks.map((block, i) => (
         <React.Fragment key={i}>
           <div className="flex flex-col items-center">
-            <div className="bg-black/40 backdrop-blur-md border border-accent-primary/20 rounded-2xl w-[72px] h-[72px] flex items-center justify-center shadow-lg shadow-accent-primary/5">
-              <span className="text-accent-primary font-extrabold text-3xl tabular-nums drop-shadow-[0_0_10px_rgba(34,211,238,0.3)]">
+            <div className="bg-black/40 backdrop-blur-md border border-accent-primary/20 rounded-xl w-[56px] h-[56px] flex items-center justify-center shadow-lg shadow-accent-primary/5">
+              <span className="text-accent-primary font-extrabold text-2xl tabular-nums drop-shadow-[0_0_10px_rgba(34,211,238,0.3)]">
                 {String(block.value).padStart(2, '0')}
               </span>
             </div>
-            <span className="text-brand-400 text-[10px] font-medium uppercase tracking-widest mt-1.5">
+            <span className="text-brand-400 text-[9px] font-medium uppercase tracking-widest mt-1">
               {block.label}
             </span>
           </div>
           {i < blocks.length - 1 && (
-            <span className="text-accent-primary/40 text-2xl font-bold mt-[-16px]">:</span>
+            <span className="text-accent-primary/40 text-xl font-bold mt-[-14px]">:</span>
           )}
         </React.Fragment>
       ))}
