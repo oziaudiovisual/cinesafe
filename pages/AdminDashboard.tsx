@@ -30,6 +30,7 @@ export const AdminDashboard: React.FC = () => {
     const [recovered, setRecovered] = useState<any[]>([]);
     const [txFrom, setTxFrom] = useState('');
     const [txTo, setTxTo] = useState('');
+    const [txSearch, setTxSearch] = useState('');
     const [users, setUsers] = useState<User[]>([]);
     const [ads, setAds] = useState<Ad[]>([]);
     const [userFilter, setUserFilter] = useState('');
@@ -105,7 +106,16 @@ export const AdminDashboard: React.FC = () => {
     const handleDeleteAd = (ad: Ad) => { setModalConfig({ title: "Excluir Anúncio", message: "Tem certeza que deseja excluir esta campanha?", isDestructive: true, confirmLabel: "Excluir Anúncio", action: async () => { await adService.deleteAd(ad.id); await loadData(); setModalOpen(false); } }); setModalOpen(true); };
 
     const sortedUsers = [...users].filter(u => u.name.toLowerCase().includes(userFilter.toLowerCase()) || u.email.toLowerCase().includes(userFilter.toLowerCase())).sort((a, b) => (b.reputationPoints || 0) - (a.reputationPoints || 0));
-    const filteredTx = contracts.filter(c => (!txFrom || c.createdAt.slice(0, 10) >= txFrom) && (!txTo || c.createdAt.slice(0, 10) <= txTo));
+    const emailById: Record<string, string> = {};
+    users.forEach(u => { emailById[u.id] = u.email || ''; });
+    const txQuery = txSearch.trim().toLowerCase();
+    const filteredTx = contracts.filter(c => {
+        if (txFrom && c.createdAt.slice(0, 10) < txFrom) return false;
+        if (txTo && c.createdAt.slice(0, 10) > txTo) return false;
+        if (!txQuery) return true;
+        return [c.ownerName, c.counterpartyName, emailById[c.ownerId], emailById[c.counterpartyId]]
+            .some(v => (v || '').toLowerCase().includes(txQuery));
+    });
     const filteredTxTotal = filteredTx.reduce((s, c) => s + (Number(c.value) || 0), 0);
 
     return (
@@ -286,6 +296,10 @@ export const AdminDashboard: React.FC = () => {
 
             {activeTab === 'transactions' && (
                 <div className="space-y-4">
+                    <div className="relative group">
+                        <Icons.Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-500 w-5 h-5 group-focus-within:text-accent-secondary transition-colors" />
+                        <input type="text" className="w-full glass-input rounded-xl py-3 pl-12 pr-4 text-white" placeholder="Buscar por nome ou email do usuário..." value={txSearch} onChange={e => setTxSearch(e.target.value)} />
+                    </div>
                     <div className="flex flex-wrap gap-3 items-end">
                         <div>
                             <label className="text-xs font-bold text-brand-400 uppercase ml-1">De</label>
@@ -295,7 +309,7 @@ export const AdminDashboard: React.FC = () => {
                             <label className="text-xs font-bold text-brand-400 uppercase ml-1">Até</label>
                             <input type="date" className="w-full glass-input rounded-xl p-3 mt-1" value={txTo} onChange={e => setTxTo(e.target.value)} />
                         </div>
-                        {(txFrom || txTo) && <button onClick={() => { setTxFrom(''); setTxTo(''); }} className="px-4 py-3 text-xs font-bold text-brand-400 hover:text-white">Limpar</button>}
+                        {(txFrom || txTo || txSearch) && <button onClick={() => { setTxFrom(''); setTxTo(''); setTxSearch(''); }} className="px-4 py-3 text-xs font-bold text-brand-400 hover:text-white">Limpar</button>}
                         <div className="ml-auto text-right">
                             <p className="text-sm text-white font-bold">{filteredTx.length} transações</p>
                             <p className="text-xs text-brand-400">{brl(filteredTxTotal)} movimentados</p>
