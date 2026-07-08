@@ -5,14 +5,12 @@ import { Equipment, EquipmentCategory } from '../types';
 import { Icons } from '../components/Icons';
 import { CineSafeLogo } from '../components/CineSafeLogo';
 
-type Listing = { item: Equipment; type: 'rent' | 'sale' };
-
 // Página pública (aberta a qualquer visitante). A pessoa pode navegar pela
 // vitrine, mas qualquer AÇÃO (ver detalhes, ter interesse, anunciar, verificar
 // serial etc.) exige login/cadastro. Todos os botões levam para /login ou /register.
 export const Landing: React.FC = () => {
   const navigate = useNavigate();
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<string>('');
 
@@ -24,10 +22,13 @@ export const Landing: React.FC = () => {
           equipmentService.getRentalsPaginated(null, 24, {}),
           equipmentService.getSalesPaginated(null, 24, {}),
         ]);
-        const combined: Listing[] = [
-          ...rentals.data.map(item => ({ item, type: 'rent' as const })),
-          ...sales.data.map(item => ({ item, type: 'sale' as const })),
-        ];
+        // Deduplica por item: um equipamento que está para aluguel E venda aparece
+        // uma única vez (com as duas etiquetas), em vez de duplicado.
+        const byId = new Map<string, Equipment>();
+        [...rentals.data, ...sales.data].forEach(item => {
+          if (!byId.has(item.id)) byId.set(item.id, item);
+        });
+        const combined = Array.from(byId.values());
         // Embaralha (Fisher-Yates) para exibir itens aleatórios a cada visita
         for (let i = combined.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -49,7 +50,7 @@ export const Landing: React.FC = () => {
   const goToRegister = () => navigate('/register');
 
   const filtered = useMemo(
-    () => (filterCategory ? listings.filter(l => l.item.category === filterCategory) : listings),
+    () => (filterCategory ? listings.filter(it => it.category === filterCategory) : listings),
     [listings, filterCategory]
   );
 
@@ -167,12 +168,12 @@ export const Landing: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map(({ item, type }, index) => {
+              {filtered.map((item, index) => {
                 return (
                   <div
                     key={`${item.id}-${index}`}
                     onClick={goToLogin}
-                    className={`glass-card rounded-[2rem] overflow-hidden group cursor-pointer flex flex-col transition-all duration-300 ${type === 'rent' ? 'hover:border-accent-primary/30' : 'hover:border-green-500/30'}`}
+                    className="glass-card rounded-[2rem] overflow-hidden group cursor-pointer flex flex-col transition-all duration-300 hover:border-accent-primary/30"
                   >
                     <div className="aspect-[4/3] relative overflow-hidden bg-black/40">
                       <img src={item.imageUrl} alt={item.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
@@ -184,17 +185,23 @@ export const Landing: React.FC = () => {
                           <span className="text-xs text-brand-300 font-mono">{item.model}</span>
                         </div>
                       </div>
-                      {type === 'rent' ? (
-                        <div className="absolute top-4 right-4 bg-accent-primary text-brand-950 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
-                          R$ {item.rentalPricePerDay?.toLocaleString('pt-BR')}/dia
-                        </div>
-                      ) : (
-                        <div className="absolute top-4 right-4 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
-                          R$ {item.salePrice?.toLocaleString('pt-BR')}
-                        </div>
-                      )}
-                      <div className="absolute top-4 left-4 bg-black/50 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-md border border-white/10">
-                        {type === 'rent' ? 'ALUGUEL' : 'VENDA'}
+                      {/* Etiquetas: o mesmo item pode estar para aluguel E venda */}
+                      <div className="absolute top-4 left-4 flex flex-col gap-1.5 items-start">
+                        {item.isForRent && <span className="bg-accent-primary text-brand-950 text-[10px] font-bold px-2 py-1 rounded-md shadow-lg">ALUGUEL</span>}
+                        {item.isForSale && <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg">VENDA</span>}
+                      </div>
+                      {/* Preços correspondentes */}
+                      <div className="absolute top-4 right-4 flex flex-col gap-1.5 items-end">
+                        {item.isForRent && (
+                          <span className="bg-accent-primary text-brand-950 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
+                            R$ {item.rentalPricePerDay?.toLocaleString('pt-BR')}/dia
+                          </span>
+                        )}
+                        {item.isForSale && (
+                          <span className="bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
+                            R$ {item.salePrice?.toLocaleString('pt-BR')}
+                          </span>
+                        )}
                       </div>
                     </div>
 
