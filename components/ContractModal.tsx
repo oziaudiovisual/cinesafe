@@ -4,6 +4,7 @@ import { equipmentService } from '../services/equipmentService';
 import { contractService } from '../services/contractService';
 import { Equipment, EquipmentStatus, User, ContractType } from '../types';
 import { Icons } from '../components/Icons';
+import { CurrencyInput } from '../components/CurrencyInput';
 
 interface ContractModalProps {
   isOpen: boolean;
@@ -98,7 +99,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({ isOpen, onClose, o
           {/* Valor */}
           <div>
             <label className="block text-xs font-bold text-brand-400 uppercase mb-2">{type === 'rental' ? 'Valor total do aluguel (R$)' : 'Valor de venda (R$)'}</label>
-            <input type="number" className="w-full glass-input rounded-xl p-3" placeholder="0,00" value={value || ''} onChange={e => setValue(Number(e.target.value))} />
+            <CurrencyInput className="w-full glass-input rounded-xl p-3" placeholder="0,00" value={value} onValueChange={setValue} />
           </div>
 
           {/* Datas (aluguel) */}

@@ -1,8 +1,31 @@
 
 import { supabase } from './supabase';
 import { userService } from './userService';
-import { raffleService } from './raffleService';
 import { User } from '../types';
+
+const REFERRAL_STORAGE_KEY = 'cinesafe_ref';
+const REFERRAL_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+// Persiste o código de indicação antes do redirect OAuth (chamado no Register).
+export const storeReferral = (code: string) => {
+  try {
+    localStorage.setItem(REFERRAL_STORAGE_KEY, JSON.stringify({ code, ts: Date.now() }));
+  } catch (e) { /* localStorage indisponível — ignora */ }
+};
+
+// Lê e remove o código de indicação (uso único, com TTL de 24h).
+const consumeStoredReferral = (): string | undefined => {
+  try {
+    const raw = localStorage.getItem(REFERRAL_STORAGE_KEY);
+    if (!raw) return undefined;
+    localStorage.removeItem(REFERRAL_STORAGE_KEY);
+    const { code, ts } = JSON.parse(raw);
+    if (!code || typeof ts !== 'number' || Date.now() - ts > REFERRAL_TTL_MS) return undefined;
+    return code;
+  } catch (e) {
+    return undefined;
+  }
+};
 
 export const AuthService = {
   
@@ -22,7 +45,11 @@ export const AuthService = {
           const firstName = name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
           const randomSuffix = Math.random().toString(36).substring(2, 6);
           const myReferralCode = `${firstName}-${randomSuffix}`;
-          
+
+          // Referral via OAuth: o ?ref é persistido no localStorage antes do redirect
+          // do Google (ver Register). Aqui recuperamos e limpamos (uso único).
+          const referredByCode = consumeStoredReferral();
+
           const newUser: User = {
             id: session.user.id,
             email: session.user.email || '',
@@ -33,22 +60,19 @@ export const AuthService = {
             isVerified: false,
             role: 'user',
             referralCode: myReferralCode,
+            ...(referredByCode ? { referredBy: referredByCode } : {}),
             referralCount: 0,
             usageStats: { serialChecks: {count: 0, month: ''}, contactReveals: {count: 0, month: ''} }
           };
-          
+
           await userService.saveUser(newUser);
-          
-          // Grant raffle signup tickets if any active raffles exist
-          try {
-            const activeRaffles = await raffleService.getActiveRaffles();
-            for (const raffle of activeRaffles) {
-                await raffleService.grantSignupTicket(raffle.id, newUser);
-            }
-          } catch (e) {
-              console.error('Erro ao conceder tickets de sorteio no OAuth:', e);
+
+          // Conta a indicação (incrementa referral_count do indicador). O ticket de
+          // sorteio NÃO é concedido aqui — só quando o convidado participar com CPF.
+          if (referredByCode) {
+            try { await userService.processReferral(referredByCode, newUser); } catch (e) { console.error('Erro no referral OAuth:', e); }
           }
-          
+
           profile = newUser;
         }
         
@@ -126,19 +150,10 @@ export const AuthService = {
 
         await userService.saveUser(newUser);
 
-        // Process Referral
+        // Process Referral (incrementa referral_count do indicador). O ticket de
+        // sorteio NÃO é concedido aqui — só quando o convidado participar com CPF.
         if (referralCode) {
             await userService.processReferral(referralCode, newUser);
-        }
-
-        // Sorteios: conceder ticket de cadastro para todos os sorteios ativos
-        try {
-            const activeRaffles = await raffleService.getActiveRaffles();
-            for (const raffle of activeRaffles) {
-                await raffleService.grantSignupTicket(raffle.id, newUser);
-            }
-        } catch (e) {
-            console.error('Erro ao conceder tickets de sorteio no cadastro:', e);
         }
 
         return { user: newUser };

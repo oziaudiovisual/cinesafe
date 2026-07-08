@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Icons } from '../components/Icons';
 import { RaffleCountdown } from '../components/RaffleCountdown';
 import { raffleService } from '../services/raffleService';
+import { RaffleCpfModal } from '../components/RaffleCpfModal';
 import { Raffle, RaffleTicket } from '../types';
 
 export const Raffles: React.FC = () => {
@@ -13,6 +14,7 @@ export const Raffles: React.FC = () => {
   const [userTickets, setUserTickets] = useState<RaffleTicket[]>([]);
   const [leaderboard, setLeaderboard] = useState<{ userId: string; userName: string; userAvatar: string; ticketCount: number }[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showCpfModal, setShowCpfModal] = useState(false);
 
   useEffect(() => {
     loadRaffles();
@@ -88,8 +90,9 @@ export const Raffles: React.FC = () => {
     );
   }
 
-  const signupTickets = userTickets.filter(t => t.source === 'signup').length;
+  const participationTickets = userTickets.filter(t => t.source === 'participation').length;
   const referralTickets = userTickets.filter(t => t.source === 'referral').length;
+  const isParticipating = participationTickets > 0;
   const isCompleted = selectedRaffle?.status === 'completed';
   const isWinner = isCompleted && selectedRaffle?.winnerId === user.id;
 
@@ -237,6 +240,23 @@ export const Raffles: React.FC = () => {
             </div>
           </div>
 
+          {/* CTA de participação (antifraude via CPF) */}
+          {!isCompleted && (
+            isParticipating ? (
+              <div className="glass-card rounded-2xl p-4 border border-green-500/20 flex items-center justify-center gap-2 text-green-400 font-bold">
+                <Icons.CheckCircle className="w-5 h-5" />
+                Você está concorrendo — {userTickets.length} {userTickets.length === 1 ? 'ticket' : 'tickets'} 🎟️
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCpfModal(true)}
+                className="w-full bg-gradient-to-r from-accent-primary to-accent-secondary text-brand-950 font-bold py-4 rounded-2xl text-lg hover:scale-[1.01] transition-all shadow-lg shadow-accent-primary/20 flex items-center justify-center gap-2"
+              >
+                <Icons.Gift className="w-5 h-5" /> Participar do sorteio
+              </button>
+            )
+          )}
+
           {/* Detalhamento dos seus tickets + Convite */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Seus Tickets */}
@@ -251,9 +271,9 @@ export const Raffles: React.FC = () => {
                     <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
                       <Icons.CheckCircle className="w-4 h-4 text-green-400" />
                     </div>
-                    <span className="text-brand-300 text-sm">Cadastro na plataforma</span>
+                    <span className="text-brand-300 text-sm">Sua participação</span>
                   </div>
-                  <span className="text-white font-bold">{signupTickets}</span>
+                  <span className="text-white font-bold">{participationTickets}</span>
                 </div>
                 <div className="flex items-center justify-between bg-black/20 rounded-xl px-4 py-3 border border-white/5">
                   <div className="flex items-center gap-2">
@@ -281,7 +301,7 @@ export const Raffles: React.FC = () => {
                     Ganhe Mais Tickets
                   </h3>
                   <p className="text-brand-400 text-sm mb-4">
-                    Cada amigo que se cadastrar usando seu link = <span className="text-accent-primary font-bold">+1 ticket</span> para você!
+                    Cada amigo que <span className="text-white font-semibold">participar</span> (com CPF) usando seu link = <span className="text-accent-primary font-bold">+1 ticket</span> para você!
                   </p>
 
                   <div className="bg-black/30 rounded-xl p-4 border border-white/10 mb-4">
@@ -327,74 +347,6 @@ export const Raffles: React.FC = () => {
             )}
           </div>
 
-          {/* Leaderboard */}
-          <div className="glass-card rounded-2xl p-6 border border-white/5">
-            <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
-              <Icons.Trophy className="w-5 h-5 text-yellow-400" />
-              Ranking de Participantes
-            </h3>
-            {leaderboard.length === 0 ? (
-              <p className="text-brand-500 text-sm text-center py-8">
-                Nenhum participante ainda. Seja o primeiro a convidar amigos!
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {leaderboard.slice(0, 10).map((entry, i) => {
-                  const isCurrentUser = entry.userId === user.id;
-                  const medals = ['🥇', '🥈', '🥉'];
-                  return (
-                    <div
-                      key={entry.userId}
-                      className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
-                        isCurrentUser
-                          ? 'bg-accent-primary/10 border border-accent-primary/20'
-                          : i === 0
-                            ? 'bg-yellow-500/5 border border-yellow-500/10'
-                            : 'bg-black/20 border border-white/5'
-                      }`}
-                    >
-                      {/* Posição */}
-                      <div className="w-8 text-center flex-shrink-0">
-                        {i < 3 ? (
-                          <span className="text-lg">{medals[i]}</span>
-                        ) : (
-                          <span className="text-brand-500 font-bold text-sm">{i + 1}º</span>
-                        )}
-                      </div>
-
-                      {/* Avatar */}
-                      <img
-                        src={entry.userAvatar}
-                        alt={entry.userName}
-                        className={`w-9 h-9 rounded-full object-cover flex-shrink-0 border-2 ${
-                          i === 0 ? 'border-yellow-500' : isCurrentUser ? 'border-accent-primary' : 'border-white/10'
-                        }`}
-                      />
-
-                      {/* Nome */}
-                      <span className={`flex-1 truncate text-sm font-medium ${
-                        isCurrentUser ? 'text-accent-primary' : 'text-white'
-                      }`}>
-                        {entry.userName}
-                        {isCurrentUser && <span className="text-brand-400 text-xs ml-1">(você)</span>}
-                      </span>
-
-                      {/* Tickets */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Icons.Ticket className={`w-3.5 h-3.5 ${i === 0 ? 'text-yellow-400' : 'text-brand-400'}`} />
-                        <span className={`font-bold text-sm ${
-                          i === 0 ? 'text-yellow-400' : isCurrentUser ? 'text-accent-primary' : 'text-white'
-                        }`}>
-                          {entry.ticketCount}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
           {/* Regras */}
           <div className="glass-card rounded-2xl p-6 border border-white/5">
             <h3 className="text-white font-bold text-base mb-3 flex items-center gap-2">
@@ -403,8 +355,8 @@ export const Raffles: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               {[
-                { step: '1', title: 'Cadastre-se', desc: 'Ao se cadastrar na plataforma durante o período do sorteio, você ganha automaticamente 1 ticket.' },
-                { step: '2', title: 'Convide Amigos', desc: 'Compartilhe seu link de convite. Cada amigo que se cadastrar = +1 ticket para você.' },
+                { step: '1', title: 'Participe', desc: 'Informe seu CPF para concorrer. Garantimos 1 participação por pessoa — é o nosso antifraude.' },
+                { step: '2', title: 'Convide Amigos', desc: 'Compartilhe seu link. Cada amigo que participar (com CPF) = +1 ticket para você.' },
                 { step: '3', title: 'Aguarde o Sorteio', desc: 'Na data de encerramento, o vencedor será sorteado. Mais tickets = mais chances!' },
               ].map((item) => (
                 <div key={item.step} className="flex gap-3">
@@ -419,6 +371,12 @@ export const Raffles: React.FC = () => {
               ))}
             </div>
           </div>
+          <RaffleCpfModal
+            isOpen={showCpfModal}
+            raffleId={selectedRaffle.id}
+            onClose={() => setShowCpfModal(false)}
+            onParticipated={() => { setShowCpfModal(false); selectRaffle(selectedRaffle); }}
+          />
         </>
       )}
     </div>

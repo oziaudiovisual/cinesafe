@@ -1,6 +1,6 @@
 
 import { supabase } from './supabase';
-import { Raffle, RaffleTicket, User } from '../types';
+import { Raffle, RaffleTicket } from '../types';
 import { notificationService } from './notificationService';
 import { processImageForWebP } from '../utils/imageProcessor';
 
@@ -156,57 +156,39 @@ export const raffleService = {
     }
   },
 
-  grantSignupTicket: async (raffleId: string, user: User): Promise<boolean> => {
+  // Participação no sorteio via CPF. Toda a regra antifraude (validação de CPF,
+  // unicidade, ticket de participação, referral qualificado, contadores) roda na
+  // função Postgres `participar_sorteio` (SECURITY DEFINER). O cliente não insere
+  // tickets direto (INSERT revogado). Ver spec e supabase/migrations/.
+  participate: async (
+    raffleId: string,
+    cpf: string
+  ): Promise<{ ok: boolean; tickets?: number; code?: string; message?: string }> => {
     try {
-      const ticket: any = {
-        id: generateUUID(), raffle_id: raffleId,
-        user_id: user.id, user_name: user.name, user_avatar: user.avatarUrl,
-        source: 'signup', created_at: new Date().toISOString(),
-      };
-      await supabase.from('raffle_tickets').insert(ticket);
-      
-      // Incrementar contadores
-      const { data: raffle } = await supabase.from('raffles').select('total_tickets, total_participants').eq('id', raffleId).single();
-      if (raffle) {
-        await supabase.from('raffles').update({
-          total_tickets: (raffle.total_tickets || 0) + 1,
-          total_participants: (raffle.total_participants || 0) + 1,
-        }).eq('id', raffleId);
+      const { data, error } = await supabase.rpc('participar_sorteio', {
+        p_raffle_id: raffleId,
+        p_cpf: cpf,
+      });
+      if (error) {
+        console.error('Erro ao participar do sorteio:', error);
+        return { ok: false, message: 'Não foi possível concluir. Tente novamente.' };
       }
-      return true;
+      return (data || { ok: false, message: 'Não foi possível concluir. Tente novamente.' }) as {
+        ok: boolean; tickets?: number; code?: string; message?: string;
+      };
     } catch (e) {
-      console.error('Erro ao conceder ticket de cadastro:', e);
-      return false;
+      console.error('Erro ao participar do sorteio:', e);
+      return { ok: false, message: 'Não foi possível concluir. Tente novamente.' };
     }
   },
 
-  grantReferralTicket: async (
-    raffleId: string,
-    referrer: User,
-    referredUser: { id: string; name: string }
-  ): Promise<boolean> => {
+  // Lembrete in-app idempotente: cria (uma vez) a notificação para convidados que
+  // não completaram o CPF em 24h, se houver sorteio ativo. Silencioso.
+  ensureParticipationReminder: async (): Promise<void> => {
     try {
-      const existingTickets = await raffleService.getUserTickets(raffleId, referrer.id);
-      const isNewParticipant = existingTickets.length === 0;
-
-      const ticket: any = {
-        id: generateUUID(), raffle_id: raffleId,
-        user_id: referrer.id, user_name: referrer.name, user_avatar: referrer.avatarUrl,
-        source: 'referral', referred_user_id: referredUser.id, referred_user_name: referredUser.name,
-        created_at: new Date().toISOString(),
-      };
-      await supabase.from('raffle_tickets').insert(ticket);
-
-      const { data: raffle } = await supabase.from('raffles').select('total_tickets, total_participants').eq('id', raffleId).single();
-      if (raffle) {
-        const updates: any = { total_tickets: (raffle.total_tickets || 0) + 1 };
-        if (isNewParticipant) updates.total_participants = (raffle.total_participants || 0) + 1;
-        await supabase.from('raffles').update(updates).eq('id', raffleId);
-      }
-      return true;
+      await supabase.rpc('ensure_participation_reminder');
     } catch (e) {
-      console.error('Erro ao conceder ticket de referral:', e);
-      return false;
+      /* silencioso — lembrete é best-effort */
     }
   },
 

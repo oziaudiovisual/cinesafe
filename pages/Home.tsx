@@ -25,6 +25,9 @@ export const Home: React.FC = () => {
   useEffect(() => {
     const loadNotifications = async () => {
       if (user) {
+        // Lembrete antifraude: cria (idempotente) a notificação para convidados
+        // sem CPF após 24h. Roda antes de buscar, para já aparecer na lista.
+        await raffleService.ensureParticipationReminder();
         const n = await notificationService.getUserNotifications(user.id);
         setNotifications(n);
       }

@@ -108,7 +108,8 @@ export type NotificationType =
   | 'ITEM_TRANSFER'
   | 'RENTAL_OVERDUE'
   | 'RAFFLE_TICKET'
-  | 'RAFFLE_WINNER';
+  | 'RAFFLE_WINNER'
+  | 'RAFFLE_CPF_REMINDER';
 
 export interface Notification {
   id: string;
@@ -268,7 +269,7 @@ export interface RaffleTicket {
   userId: string;             // quem ganhou este ticket
   userName: string;           // snapshot
   userAvatar: string;         // snapshot
-  source: 'signup' | 'referral'; // como ganhou: cadastro ou convite
+  source: 'participation' | 'referral'; // como ganhou: participação (com CPF) ou convite
   referredUserId?: string;    // se source='referral', quem foi o convidado
   referredUserName?: string;  // snapshot
   createdAt: string;

@@ -1,14 +1,16 @@
 # Sorteios (Raffles)
 
-> Como o Cine Safe permite que administradores criem sorteios de equipamentos para a comunidade, com tickets gamificados por cadastro e referral.
+> Como o Cine Safe permite que administradores criem sorteios de equipamentos para a comunidade, com **participação protegida por antifraude (CPF único)** e tickets por referral qualificado.
 
-O sistema de sorteios incentiva o crescimento orgânico da plataforma. O admin cria um sorteio com prêmio (ex: câmera), define um período e todos os usuários que se cadastrarem durante esse período ganham automaticamente 1 ticket. Cada convite via referral que resulte em um novo cadastro dá +1 ticket ao convidador. Mais tickets = mais chances de ganhar.
+O sistema de sorteios incentiva o crescimento orgânico da plataforma. O admin cria um sorteio com prêmio (ex: câmera) e um período. Para concorrer, o usuário clica em **"Participar do sorteio"** e informa um **CPF válido e único** (1 CPF = 1 conta) — isso garante *1 pessoa real = 1 participação* e mata o "N e-mails → N chances". Cada convidado que **participar** (com CPF) dá +1 ticket ao convidador (**referral qualificado**). Mais tickets = mais chances.
+
+> **Antifraude (Fase 1)** — spec: [`docs/superpowers/specs/2026-07-08-antifraude-sorteios-design.md`](../superpowers/specs/2026-07-08-antifraude-sorteios-design.md). A validação de CPF por dígito verificador barra o casual; a barreira contra CPFs *gerados* (atacante determinado) é a **Fase 2** (API paga de existência de CPF), documentada como upgrade.
 
 **Restrição:** apenas **um sorteio ativo por vez** (validado no cliente, no formulário do admin).
 
-Toda a lógica vive em [`services/raffleService.ts`](../reference/services.md); a UI do admin em [`pages/AdminDashboard.tsx`](../reference/pages.md) (aba "Sorteios"); a página pública em [`pages/Raffles.tsx`](../reference/pages.md).
+Toda a lógica de escrita de ticket vive em **funções Postgres `SECURITY DEFINER`** (ver [`supabase/migrations/20260708_antifraude_sorteios.sql`](../../supabase/migrations/20260708_antifraude_sorteios.sql)); o cliente chama via `raffleService.participate` ([`services/raffleService.ts`](../reference/services.md)). UI do admin em [`pages/AdminDashboard.tsx`](../reference/pages.md) (aba "Sorteios"); página pública em [`pages/Raffles.tsx`](../reference/pages.md); modal de CPF em [`components/RaffleCpfModal.tsx`](../reference/components.md).
 
-> Aviso importante: **tickets e contadores são validados no cliente.** Um usuário com acesso direto ao Firestore poderia manipular tickets. Isso segue o padrão de dívida técnica documentado do projeto. As Firestore Rules protegem contra fabricação de tickets para outros usuários (`userId == auth.uid`).
+> **Escrita de ticket é server-side.** O `INSERT` direto em `raffle_tickets` foi **revogado** do cliente — só a função `participar_sorteio` grava. Isso fecha a auto-fabricação de tickets pelo console (o buraco crítico da arquitetura client-only).
 
 ---
 
@@ -46,36 +48,39 @@ Definido em [`types.ts`](../03-data-model.md):
 | `userId` | `string` | Dono do ticket |
 | `userName` | `string` | Snapshot |
 | `userAvatar` | `string` | Snapshot |
-| `source` | `'signup'` \| `'referral'` | Origem: cadastro ou convite |
+| `source` | `'participation'` \| `'referral'` | Origem: participação (com CPF) ou convite qualificado |
 | `referredUserId?` | `string` | Se referral, quem se cadastrou |
 | `referredUserName?` | `string` | Snapshot |
 | `createdAt` | `string` | ISO |
 
 ---
 
-## Fluxo: ganhar tickets
+## Fluxo: ganhar tickets (via participação com CPF)
 
 ```mermaid
 flowchart TD
-    A["Novo usuário abre<br/>/#/register?ref=CODE"] --> B["AuthService.register()"]
-    B --> C["Cria perfil no Firestore"]
-    C --> D["processReferral(CODE, newUser)"]
-    D --> E["referralCount += 1<br/>para o indicador"]
-    D --> F["Para cada sorteio ativo:<br/>grantReferralTicket(raffleId, referrer, newUser)"]
-    F --> G["Referrer ganha +1 ticket<br/>source='referral'"]
-    C --> H["Para cada sorteio ativo:<br/>grantSignupTicket(raffleId, newUser)"]
-    H --> I["Novo usuário ganha +1 ticket<br/>source='signup'"]
+    A["Usuário clica<br/>'Participar do sorteio'"] --> B["RaffleCpfModal:<br/>informa CPF (máscara + validação)"]
+    B --> C["raffleService.participate(raffleId, cpf)"]
+    C --> D["RPC participar_sorteio()<br/>(SECURITY DEFINER)"]
+    D --> E["valida CPF (dígito) +<br/>grava user_cpf (único global)"]
+    E --> F["cria ticket source='participation'<br/>(1 por pessoa/sorteio)"]
+    E --> G{"veio de convite<br/>e indicador != próprio?"}
+    G -->|sim| H["cria ticket source='referral'<br/>pro indicador (1 por convidado)"]
+    F --> I["recalcula contadores<br/>(COUNT)"]
+    H --> I
 ```
 
 ### Detalhes:
 
-1. **Ticket de cadastro (`signup`):** concedido automaticamente em `AuthService.register` após salvar o perfil. Percorre `raffleService.getActiveRaffles()` e chama `grantSignupTicket` para cada sorteio ativo.
+1. **Nada é concedido no cadastro** (nem e-mail nem Google). O ticket nasce só quando a pessoa **participa** com CPF.
 
-2. **Ticket de referral:** concedido em `userService.processReferral` quando o código de referral é válido. Percorre os sorteios ativos e chama `grantReferralTicket` para cada um. O indicador ganha o ticket (não o novo usuário).
+2. **Ticket de participação (`participation`):** criado dentro de `participar_sorteio` após validar o CPF e gravá-lo em `user_cpf` (constraint `UNIQUE(cpf)` → 1 CPF = 1 conta). Índice `UNIQUE(raffle_id, user_id) WHERE source='participation'` torna a operação idempotente.
 
-3. **Atomicidade:** cada `grantSignupTicket`/`grantReferralTicket` usa `writeBatch` para criar o ticket E incrementar os contadores do raffle (`totalTickets`, `totalParticipants`) atomicamente.
+3. **Ticket de referral qualificado (`referral`):** também criado dentro de `participar_sorteio`, quando o participante tem `referred_by` que resolve para um indicador **diferente dele mesmo** (auto-referral bloqueado). Índice `UNIQUE(raffle_id, referred_user_id) WHERE source='referral'` → 1 referral por convidado. O `referral_count` (métrica do Premium) continua sendo incrementado no cadastro por `processReferral` — separado do ticket de sorteio.
 
-4. **`totalParticipants`** só é incrementado quando o usuário não tinha tickets anteriores naquele sorteio (verificação via `getUserTickets`).
+4. **Contadores** (`totalTickets`, `totalParticipants`) são **recalculados via `COUNT()`** ao final da função (evita drift/corrida), não incrementados.
+
+5. **Referral via Google:** o `?ref` é persistido em `localStorage` no `Register` (`storeReferral`) e recuperado no `AuthService.getSession` ao criar o perfil OAuth (`consumeStoredReferral`, uso único com TTL 24h) — sem isso, convidados que entram por Google não contariam.
 
 ---
 
@@ -112,26 +117,16 @@ No painel admin, ao clicar "Sortear":
 
 ---
 
-## Regras de segurança
+## Regras de segurança (Supabase/Postgres)
 
-Em [`firestore.rules`](../../firestore.rules):
+> Nota: as docs antigas citavam `firestore.rules` — o projeto migrou para Supabase. A segurança dos sorteios agora é **Postgres**: RLS + permissões + funções `SECURITY DEFINER`. Ver [`supabase/migrations/20260708_antifraude_sorteios.sql`](../../supabase/migrations/20260708_antifraude_sorteios.sql).
 
-```
-// RAFFLES: leitura por autenticados; CRUD somente admin
-match /raffles/{raffleId} {
-  allow read: if isSignedIn();
-  allow create, update, delete: if isAdmin();
-}
+- **`raffle_tickets`:** `SELECT` para autenticados; **`INSERT` revogado** de `anon`/`authenticated` (só a função `participar_sorteio` grava); `UPDATE`/`DELETE` só admin (sortear/excluir).
+- **`user_cpf`:** `SELECT` só do dono ou admin; nenhuma escrita direta do cliente. `UNIQUE(cpf)` global.
+- **`users`:** trigger `prevent_referred_by_change` impede alterar `referred_by` após definido (reforço anti auto-referral) — sem usar GRANT por coluna, que quebraria escritas legítimas.
+- **Funções** `participar_sorteio` / `ensure_participation_reminder` / `resetar_participacoes_sorteio`: `SECURITY DEFINER` com `search_path` fixo; a de reset é guardada por `is_admin()` interno.
 
-// RAFFLE_TICKETS: leitura por autenticados; criação auto-atribuída; edição admin
-match /raffle_tickets/{ticketId} {
-  allow read: if isSignedIn();
-  allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-  allow update, delete: if isAdmin();
-}
-```
-
-**Anti-fabricação:** a regra `request.resource.data.userId == request.auth.uid` impede que um usuário crie tickets atribuídos a outro usuário. Porém, um usuário malicioso poderia criar tickets para si mesmo fora do fluxo legítimo (cadastro/referral). A mitigação completa requer Cloud Functions (mesma dívida técnica dos limites de plano).
+**Anti-fabricação:** como o `INSERT` direto foi revogado, o cliente **não** consegue mais criar tickets pelo console (o buraco crítico da arquitetura client-only). Toda concessão passa pela função, que valida CPF, unicidade e bloqueia auto-referral.
 
 ---
 
@@ -143,9 +138,10 @@ match /raffle_tickets/{ticketId} {
 2. **Stats** — participantes, tickets totais, seus tickets, suas chances (%)
 3. **Seus tickets** — breakdown por tipo (cadastro vs referral)
 4. **Link de convite** — com botão de copiar (reusa o `referralCode` existente)
-5. **Leaderboard** — top 10 por nº de tickets, com medalhas 🥇🥈🥉
-6. **Resultado** — quando concluído, mostra o vencedor; se for o usuário, exibe parabéns
-7. **Regras** — "Como funciona" em 3 passos
+5. **Resultado** — quando concluído, mostra o vencedor; se for o usuário, exibe parabéns
+6. **Regras** — "Como funciona" em 3 passos
+
+> O **ranking público de participantes** (leaderboard) foi **removido** da página `/raffles` — expor quem participa e com quantos tickets não agrega e conflita com o antifraude. O `raffleService.getRaffleLeaderboard` segue disponível para o admin e para calcular os stats do topo; só a seção visual saiu.
 
 ### Componentes reutilizáveis
 
@@ -186,26 +182,28 @@ Dois novos tipos em `NotificationType`:
 
 ## Limitações e pendências
 
-- **Validação no cliente.** Tickets são criados pelo cliente no fluxo de cadastro/referral. Um usuário com acesso direto ao Firestore poderia fabricar tickets para si mesmo (a rule impede fabricação para outros, mas não para si).
-- **Sem anti-fraude.** Assim como no referral, criar N contas com o mesmo `?ref` gera N tickets. Sem teto por usuário.
-- **Sorteio irreversível.** Uma vez executado, não há rollback. O admin deve ter certeza antes de sortear.
-- **Contadores denormalizados** (`totalTickets`, `totalParticipants`) são incrementados atomicamente via `writeBatch + increment()`, mas poderiam ficar inconsistentes se um ticket fosse deletado manualmente sem ajustar os contadores.
+- **Antifraude Fase 1.** A validação de CPF por dígito verificador barra o casual e a trava `UNIQUE(cpf)` impede a mesma pessoa em N contas. Um atacante determinado ainda pode **gerar** CPFs válidos — a barreira definitiva (existência real do CPF) é a **Fase 2** (API paga), documentada no spec.
+- **Premium ainda farmável.** `referral_count` (que libera o Premium) continua incrementando no cadastro, sem CPF. A garantia "1 pessoa real" cobre **os tickets de sorteio**, não o Premium. Risco aceito nesta fase.
+- **Lembrete só in-app.** A notificação de "complete seu CPF" (>24h) só alcança quem retorna ao app; não puxa de volta quem sumiu (seria e-mail/WhatsApp).
+- **Sorteio irreversível.** Uma vez executado, não há rollback. O admin deve ter certeza antes de sortear. O `drawWinner` continua no cliente (admin) — integridade auditável do sorteio está fora do escopo desta fase.
+- **Contadores denormalizados** (`totalTickets`, `totalParticipants`) são recalculados via `COUNT()` dentro de `participar_sorteio`, mas poderiam ficar inconsistentes se um ticket fosse deletado manualmente sem re-rodar o cálculo.
 - **Imagem do prêmio** passa pelo pipeline WebP (480px @0.85) via `processImageForWebP`.
 
 ---
 
 ## Fontes no código
 
-- [`types.ts`](../../types.ts) — `Raffle`, `RaffleTicket`, `RaffleStatus`, `NotificationType` (RAFFLE_TICKET, RAFFLE_WINNER).
-- [`services/raffleService.ts`](../../services/raffleService.ts) — CRUD, tickets, sorteio, leaderboard, upload.
-- [`services/auth.ts`](../../services/auth.ts) — auto-ticket no `register`.
-- [`services/userService.ts`](../../services/userService.ts) — ticket de referral no `processReferral`.
-- [`components/RaffleCountdown.tsx`](../../components/RaffleCountdown.tsx) — countdown visual.
-- [`components/RaffleCard.tsx`](../../components/RaffleCard.tsx) — card compacto.
-- [`pages/Raffles.tsx`](../../pages/Raffles.tsx) — página principal.
+- [`types.ts`](../../types.ts) — `Raffle`, `RaffleTicket` (`source: 'participation' | 'referral'`), `RaffleStatus`, `NotificationType` (RAFFLE_WINNER, RAFFLE_CPF_REMINDER).
+- [`supabase/migrations/20260708_antifraude_sorteios.sql`](../../supabase/migrations/20260708_antifraude_sorteios.sql) — tabela `user_cpf`, funções `participar_sorteio`/`ensure_participation_reminder`/`resetar_participacoes_sorteio`, `is_valid_cpf`, revoke + trigger.
+- [`services/raffleService.ts`](../../services/raffleService.ts) — `participate`, `ensureParticipationReminder`, sorteio, leaderboard, upload.
+- [`services/auth.ts`](../../services/auth.ts) — `storeReferral`/`consumeStoredReferral` (referral via OAuth); sem auto-ticket.
+- [`services/userService.ts`](../../services/userService.ts) — `processReferral` (só `referral_count`).
+- [`utils/cpf.ts`](../../utils/cpf.ts) — `isValidCPF`, `maskCPF`.
+- [`components/RaffleCpfModal.tsx`](../../components/RaffleCpfModal.tsx) — modal antifraude de participação.
+- [`components/RaffleCountdown.tsx`](../../components/RaffleCountdown.tsx) · [`components/RaffleCard.tsx`](../../components/RaffleCard.tsx).
+- [`pages/Raffles.tsx`](../../pages/Raffles.tsx) — página principal (botão Participar / estados).
 - [`pages/AdminDashboard.tsx`](../../pages/AdminDashboard.tsx) — aba "Sorteios" com roleta.
-- [`pages/Home.tsx`](../../pages/Home.tsx) — banner do sorteio ativo.
-- [`components/Layout.tsx`](../../components/Layout.tsx) — item de menu "Sorteios".
-- [`firestore.rules`](../../firestore.rules) — regras de `raffles` e `raffle_tickets`.
+- [`pages/Home.tsx`](../../pages/Home.tsx) — banner + dispara `ensureParticipationReminder`.
+- Spec: [`docs/superpowers/specs/2026-07-08-antifraude-sorteios-design.md`](../superpowers/specs/2026-07-08-antifraude-sorteios-design.md).
 
 Relacionados: [`referral-and-freemium.md`](./referral-and-freemium.md) · [`admin.md`](./admin.md) · [`notifications.md`](./notifications.md) · [`../03-data-model.md`](../03-data-model.md) · [`../04-security.md`](../04-security.md).

@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { Icons } from '../components/Icons';
 import { IBGEService } from '../services/ibge.ts';
 import { CineSafeLogo } from '../components/CineSafeLogo';
+import { storeReferral } from '../services/auth';
 
 interface UF {
   id: number;
@@ -35,6 +36,10 @@ export const Register: React.FC = () => {
   // Referral
   const [searchParams] = useSearchParams();
   const referralCode = searchParams.get('ref');
+
+  // Persiste o ?ref para sobreviver ao redirect do OAuth (Google). O cadastro por
+  // e-mail usa o referralCode direto; o Google recupera do localStorage no getSession.
+  useEffect(() => { if (referralCode) storeReferral(referralCode); }, [referralCode]);
 
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');

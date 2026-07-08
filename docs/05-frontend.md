@@ -333,6 +333,21 @@ toTitleCase('sony a7')      // "Sony A7"
 
 `formatDate` retorna `''` para entrada vazia. Alguns componentes formatam inline com a mesma locale/opções (ex.: `components/ContractModal.tsx:58`); o padrão canônico continua sendo `utils/formatters.ts`.
 
+### Entrada de moeda — máscara única (`CurrencyInput` + `utils/formatters.ts`)
+
+Todo campo em que o usuário **digita** um preço/valor usa a mesma máscara: **ponto separa milhar, vírgula separa centavos** (`"16.900,00"`). A máscara é do tipo **"centavos"** — cada dígito digitado é um centavo, então o valor cresce da direita para a esquerda (digitar `1690000` → `16.900,00`).
+
+```ts
+maskCurrencyBRL('1690000')   // "16.900,00"  (texto livre → mascarado, sem símbolo)
+parseCurrencyBRL('16.900,00')// 16900         (mascarado → número de reais)
+numberToCurrencyMask(16900)  // "16.900,00"   (número salvo → texto do input; '' se ≤ 0)
+```
+
+- **Campos numéricos** (valor estimado, diária, venda, valor de transação, valor de contrato) usam o componente **`components/CurrencyInput.tsx`** — controlado por um `number` (reais) via `value`/`onValueChange`. Substitui os antigos `<input type="number">`.
+- **Campos string** (preço antigo/novo do anúncio em `AdminDashboard`) aplicam `maskCurrencyBRL` inline no `onChange`, guardando a string mascarada; o `AdBanner` prefixa `R$ ` na exibição.
+
+Pontos de entrada cobertos: `pages/Inventory.tsx` (×4), `components/ContractModal.tsx` (×1), `pages/AdminDashboard.tsx` (×2). Catálogo do componente em `reference/components.md`.
+
 ### Avatares (`components/UserAvatar.tsx`)
 
 Regra de conteúdo: imagem de usuário sempre circular, `object-cover`. Quando não há foto real — `avatarUrl` ausente ou contendo `ui-avatars.com` (o placeholder gerado no cadastro em `services/auth.ts:56`) — o componente renderiza **iniciais** sobre um fundo de cor **determinística pelo nome** (`charCodeSum % COLORS.length`, 6 cores). Iniciais = primeira letra do primeiro e do último nome, senão os 2 primeiros caracteres.

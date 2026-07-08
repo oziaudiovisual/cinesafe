@@ -14,6 +14,8 @@ Esta página documenta apenas os componentes compartilhados no diretório `compo
 | `ContractModal` | `components/ContractModal.tsx` | Modal de formulário | Não | Sim | Proposta de contrato (aluguel/venda) a partir do chat |
 | `ReferralModal` | `components/ReferralModal.tsx` | Modal de upsell | Não | Sim | Paywall de indicações (freemium) e convite |
 | `LocationGateModal` | `components/LocationGateModal.tsx` | Modal bloqueante | Não | Sim | Gate obrigatório de cidade/estado para usuários OAuth sem localização |
+| `RaffleCpfModal` | `components/RaffleCpfModal.tsx` | Modal de formulário | Não | Sim | Coleta CPF (antifraude) para participar do sorteio; chama a RPC `participar_sorteio` |
+| `CurrencyInput` | `components/CurrencyInput.tsx` | Input controlado | Não | Não | Input de moeda (BRL) com máscara "centavos" — fonte da verdade é um `number` |
 | `UserAvatar` | `components/UserAvatar.tsx` | Apresentação | Sim | Não | Avatar com fallback de iniciais quando não há foto |
 | `CineSafeLogo` | `components/CineSafeLogo.tsx` | Apresentação | Sim | Não | Logotipo (`/logo.webp`) |
 | `CineGuardLogo` | `components/CineGuardLogo.tsx` | — | — | — | **Arquivo vazio (0 bytes)** — sem export; ver seção própria |
@@ -207,6 +209,57 @@ Nenhuma. O componente é **auto-suficiente**: lê `user`/`refreshUser` de `useAu
 ### Uso
 
 Não recebe props nem é aberto manualmente. Basta estar montado no `Layout` — ver `components/Layout.tsx` (`<LocationGateModal />` ao final do container).
+
+---
+
+## `CurrencyInput`
+
+Input de moeda (BRL) com **máscara única de todo o sistema**: ponto separa milhar, vírgula separa centavos (`"16.900,00"`). Máscara do tipo **"centavos"** — cada dígito digitado é um centavo, então o valor cresce da direita para a esquerda (digitar `1690000` → `16.900,00`). Fonte: `components/CurrencyInput.tsx`. Não usa portal.
+
+### Props
+
+Estende `React.InputHTMLAttributes<HTMLInputElement>` (menos `value`/`onChange`/`type`), então aceita `className`, `placeholder`, `disabled`, etc.
+
+| Nome | Tipo | Descrição |
+|---|---|---|
+| `value` | `number \| null \| undefined` | Valor atual **em reais** (fonte da verdade). Ex.: `16900` é exibido como `"16.900,00"`; `0`/vazio mostra o `placeholder`. |
+| `onValueChange` | `(value: number) => void` | Recebe o novo valor **em reais** (número já parseado). |
+
+### Comportamento
+
+- O texto exibido é sempre derivado de `value` via `numberToCurrencyMask` (a cada render) — estado e exibição nunca divergem.
+- No `onChange`, os dígitos do texto são convertidos de volta com `parseCurrencyBRL` e emitidos como `number`.
+- Renderiza um `<input type="text" inputMode="numeric">` (teclado numérico no mobile), repassando o restante das props.
+- Helpers de formatação/parse em `utils/formatters.ts` (ver [`../05-frontend.md`](../05-frontend.md) §9).
+
+### Uso
+
+Substitui os `<input type="number">` de preço. Usos atuais: `pages/Inventory.tsx` (valor estimado, valor da diária, valor de venda, valor da transação) e `components/ContractModal.tsx` (valor do contrato). Os campos de preço do **anúncio** (`pages/AdminDashboard.tsx`) são `string` livre e aplicam `maskCurrencyBRL` inline em vez deste componente.
+
+---
+
+## `RaffleCpfModal`
+
+Modal antifraude de participação no sorteio. Coleta o CPF (máscara `000.000.000-00` + validação de dígito em tempo real via `utils/cpf.ts`) e chama `raffleService.participate` → RPC `participar_sorteio`. Portal (`createPortal` → `document.body`, `z-[2000]`). Dispensável (X, backdrop, trava scroll). Fonte: `components/RaffleCpfModal.tsx`.
+
+### Props
+
+| Nome | Tipo | Descrição |
+|---|---|---|
+| `isOpen` | `boolean` | Controla a exibição; retorna `null` se `false`. |
+| `raffleId` | `string` | Sorteio no qual participar. |
+| `onClose` | `() => void` | Fecha o modal. |
+| `onParticipated` | `(tickets: number) => void` | Chamado após sucesso, com o total de tickets do usuário. |
+
+### Comportamento
+
+- Botão "Confirmar e participar" fica desabilitado até o CPF ser válido (`isValidCPF`) e mostra spinner durante o envio.
+- Em erro, exibe a mensagem retornada pela RPC (ex.: `CPF_EM_USO`, `CPF_INVALIDO`).
+- A regra (validação, unicidade global do CPF, ticket de participação, referral qualificado, contadores) roda **no Postgres** — o cliente só chama a função. Ver [`../features/raffles.md`](../features/raffles.md).
+
+### Uso
+
+Renderizado em `pages/Raffles.tsx`, aberto pelo botão "Participar do sorteio" (só aparece para quem ainda não concorre). Em `onParticipated`, a página recarrega os tickets do usuário.
 
 ---
 

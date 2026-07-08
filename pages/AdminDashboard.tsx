@@ -6,6 +6,7 @@ import { raffleService } from '../services/raffleService';
 import { User, Ad, Contract, Equipment, Raffle, RaffleTicket } from '../types';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { maskCurrencyBRL } from '../utils/formatters';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { createPortal } from 'react-dom';
@@ -267,8 +268,8 @@ export const AdminDashboard: React.FC = () => {
                                         </div>
                                         <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Título Principal</label><input type="text" className="w-full glass-input rounded-xl p-3 mt-1" value={adForm.title} onChange={e => setAdForm({...adForm, title: e.target.value})} placeholder="Ex: Sony Alpha 7 IV" /></div>
                                         <div className="grid grid-cols-2 gap-4">
-                                            <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Preço Antigo (Opcional)</label><input type="text" className="w-full glass-input rounded-xl p-3 mt-1" value={adForm.priceOld || ''} onChange={e => setAdForm({...adForm, priceOld: e.target.value})} placeholder="R$ 16.990" /></div>
-                                            <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Preço Novo (Opcional)</label><input type="text" className="w-full glass-input rounded-xl p-3 mt-1" value={adForm.priceNew || ''} onChange={e => setAdForm({...adForm, priceNew: e.target.value})} placeholder="R$ 13.997" /></div>
+                                            <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Preço Antigo (Opcional)</label><input type="text" inputMode="numeric" className="w-full glass-input rounded-xl p-3 mt-1" value={adForm.priceOld || ''} onChange={e => setAdForm({...adForm, priceOld: maskCurrencyBRL(e.target.value)})} placeholder="16.900,00" /></div>
+                                            <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Preço Novo (Opcional)</label><input type="text" inputMode="numeric" className="w-full glass-input rounded-xl p-3 mt-1" value={adForm.priceNew || ''} onChange={e => setAdForm({...adForm, priceNew: maskCurrencyBRL(e.target.value)})} placeholder="13.997,00" /></div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Texto do Botão</label><input type="text" className="w-full glass-input rounded-xl p-3 mt-1" value={adForm.buttonText} onChange={e => setAdForm({...adForm, buttonText: e.target.value})} /></div>

@@ -3,6 +3,7 @@ import { Icons } from '../components/Icons';
 import { EquipmentCategory, EquipmentStatus } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ReferralModal } from '../components/ReferralModal';
+import { CurrencyInput } from '../components/CurrencyInput';
 import { useInventory } from '../hooks/useInventory';
 import { createPortal } from 'react-dom';
 
@@ -56,7 +57,7 @@ export const Inventory: React.FC = () => {
                         {transferType === 'valued' && (
                             <div>
                                 <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Valor da Transação (R$)</label>
-                                <input type="number" className="w-full glass-input rounded-xl p-3" value={transactionValue} onChange={e => setTransactionValue(Number(e.target.value))} />
+                                <CurrencyInput className="w-full glass-input rounded-xl p-3" placeholder="0,00" value={transactionValue} onValueChange={setTransactionValue} />
                             </div>
                         )}
                         <button onClick={confirmTransfer} disabled={!selectedConnectionId || modalProcessing} className="w-full bg-accent-primary hover:bg-cyan-400 text-brand-950 font-bold py-4 rounded-xl mt-4 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
@@ -129,15 +130,15 @@ export const Inventory: React.FC = () => {
                             <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Nº de Série</label><input className="w-full glass-input rounded-xl p-3 mt-1 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="S/N do equipamento" value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} required disabled={!!editingId} />{editingId && <span className="text-[10px] text-brand-500 ml-1 flex items-center gap-1"><Icons.Lock className="w-3 h-3" /> Imutável</span>}</div>
                             <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Categoria</label><select className="w-full glass-input rounded-xl p-3 mt-1" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value as EquipmentCategory })}>{Object.values(EquipmentCategory).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div>
                         </div>
-                        <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Valor Estimado (R$)</label><input type="number" className="w-full glass-input rounded-xl p-3 mt-1" placeholder="0,00" value={formData.value} onChange={e => setFormData({ ...formData, value: Number(e.target.value) })} /></div>
+                        <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Valor Estimado (R$)</label><CurrencyInput className="w-full glass-input rounded-xl p-3 mt-1" placeholder="0,00" value={formData.value} onValueChange={v => setFormData({ ...formData, value: v })} /></div>
                         <div><label className="text-xs font-bold text-brand-400 uppercase ml-1">Descrição</label><textarea className="w-full glass-input rounded-xl p-3 mt-1 h-24 resize-none" placeholder="Detalhes, condições, acessórios inclusos..." value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} /></div>
                         <div className="flex gap-4 pt-2">
                             <label className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${formData.isForRent ? 'bg-accent-primary/20 border-accent-primary text-white' : 'bg-black/20 border-white/10 text-brand-400 hover:border-white/20'}`}><input type="checkbox" className="hidden" checked={formData.isForRent} onChange={e => handleRentToggle(e.target.checked)} /><Icons.ShoppingBag className={formData.isForRent ? 'text-accent-primary' : ''} /><div className="text-left"><span className="block font-bold text-sm">Disponível para Aluguel</span><span className="text-xs opacity-70">Listar no marketplace</span></div></label>
                             <label className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${formData.isForSale ? 'bg-green-500/20 border-green-500 text-white' : 'bg-black/20 border-white/10 text-brand-400 hover:border-white/20'}`}><input type="checkbox" className="hidden" checked={formData.isForSale} onChange={e => handleSaleToggle(e.target.checked)} /><Icons.Tag className={formData.isForSale ? 'text-green-500' : ''} /><div className="text-left"><span className="block font-bold text-sm">Disponível para Venda</span><span className="text-xs opacity-70">Listar para compradores</span></div></label>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            {formData.isForRent && <div><label className="text-xs font-bold text-accent-primary uppercase ml-1">Valor Diária (R$)</label><input type="number" className="w-full glass-input rounded-xl p-3 mt-1 border-accent-primary/50" placeholder="0,00" value={formData.rentalPrice} onChange={e => setFormData({ ...formData, rentalPrice: Number(e.target.value) })} /></div>}
-                            {formData.isForSale && <div><label className="text-xs font-bold text-green-500 uppercase ml-1">Valor de Venda (R$)</label><input type="number" className="w-full glass-input rounded-xl p-3 mt-1 border-green-500/50" placeholder="0,00" value={formData.salePrice} onChange={e => setFormData({ ...formData, salePrice: Number(e.target.value) })} /></div>}
+                            {formData.isForRent && <div><label className="text-xs font-bold text-accent-primary uppercase ml-1">Valor Diária (R$)</label><CurrencyInput className="w-full glass-input rounded-xl p-3 mt-1 border-accent-primary/50" placeholder="0,00" value={formData.rentalPrice} onValueChange={v => setFormData({ ...formData, rentalPrice: v })} /></div>}
+                            {formData.isForSale && <div><label className="text-xs font-bold text-green-500 uppercase ml-1">Valor de Venda (R$)</label><CurrencyInput className="w-full glass-input rounded-xl p-3 mt-1 border-green-500/50" placeholder="0,00" value={formData.salePrice} onValueChange={v => setFormData({ ...formData, salePrice: v })} /></div>}
                         </div>
                     </div>
                 </div>

@@ -226,28 +226,13 @@ export const userService = {
     
     if (rows && rows.length > 0) {
       const referrerRow = rows[0];
+      // Incrementa referral_count (métrica do Premium). O ticket de sorteio do
+      // indicador é concedido só quando o convidado participa com CPF (referral
+      // qualificado, dentro da função participar_sorteio no Postgres).
       await supabase
         .from('users')
         .update({ referral_count: (referrerRow.referral_count || 0) + 1 })
         .eq('id', referrerRow.id);
-
-      // Sorteios: conceder ticket de referral ao indicador para sorteios ativos
-      if (newUser) {
-        try {
-          const { raffleService } = await import('./raffleService');
-          const activeRaffles = await raffleService.getActiveRaffles();
-          const referrer = mapUserFromDb(referrerRow);
-          for (const raffle of activeRaffles) {
-            await raffleService.grantReferralTicket(
-              raffle.id,
-              referrer,
-              { id: newUser.id, name: newUser.name }
-            );
-          }
-        } catch (e) {
-          console.error('Erro ao conceder tickets de referral no sorteio:', e);
-        }
-      }
     }
   },
 

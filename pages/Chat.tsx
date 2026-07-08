@@ -300,6 +300,8 @@ export const Chat: React.FC = () => {
                                 {notif.type === 'CONNECTION_ACCEPTED' && <span className="text-green-400">Conexão Aceita</span>}
                                 {notif.type === 'RENTAL_OVERDUE' && <span className="text-red-400">Aluguel Atrasado</span>}
                                 {notif.type === 'ITEM_TRANSFER' && 'Transferência'}
+                                {notif.type === 'RAFFLE_WINNER' && <span className="text-accent-gold">Sorteio</span>}
+                                {notif.type === 'RAFFLE_CPF_REMINDER' && <span className="text-accent-primary">Sorteio</span>}
                               </p>
                             </div>
                             {notif.itemImage && (
