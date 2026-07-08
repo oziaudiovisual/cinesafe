@@ -117,7 +117,7 @@ export const Rankings: React.FC = () => {
                       </div>
 
                       <ul className="space-y-3 text-sm text-brand-300">
-                          <ScoreRow label="Foto & WhatsApp" rule="+100 XP" value={myStats?.profile || 0} />
+                          <ScoreRow label="Foto & Telefone" rule="+100 XP" value={myStats?.profile || 0} />
                           <ScoreRow label="Itens Seguros" rule="+10 XP/item" value={myStats?.items || 0} />
                           <ScoreRow label="Bônus Seguro" rule="+5 XP/item" value={myStats?.streak || 0} />
                           <ScoreRow label="Em Aluguel" rule="+20 XP/item" value={myStats?.rent || 0} />

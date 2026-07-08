@@ -20,14 +20,6 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({ isOpen, onClose, r
   const progress = Math.min(100, (currentReferrals / target) * 100);
 
   const inviteLink = `${window.location.origin}/#/register?ref=${user.referralCode}`;
-  
-  // WhatsApp Message Integration
-  const waMessage = encodeURIComponent(`Olá! Estou usando o Cine Safe para proteger meus equipamentos audiovisuais. Cadastre-se com meu link para ganharmos benefícios exclusivos: ${inviteLink}`);
-  const waUrl = `https://wa.me/?text=${waMessage}`;
-
-  const handleWhatsAppShare = () => {
-      window.open(waUrl, '_blank');
-  };
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(inviteLink);
@@ -43,9 +35,9 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({ isOpen, onClose, r
   };
 
   const messages = {
-      inventory: "No plano gratuito, você pode cadastrar até 3 equipamentos.",
-      check: "Você atingiu seu limite de 1 verificação de serial por mês.",
-      contact: "Você já revelou 2 contatos de proprietários este mês.",
+      inventory: "No plano gratuito, você pode cadastrar até 5 equipamentos.",
+      check: "Você atingiu seu limite de 5 verificações de serial por mês.",
+      contact: "Você já enviou 3 interesses/contatos este mês.",
       invite: "Ajude a comunidade a crescer e desbloqueie recursos ilimitados para sua conta."
   };
 
@@ -91,17 +83,9 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({ isOpen, onClose, r
         </div>
 
         <div className="space-y-4">
-            <p className="text-xs font-bold text-brand-400 uppercase text-center">Compartilhe seu Link</p>
-            
-            <button 
-                onClick={handleWhatsAppShare}
-                className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] transition-all"
-            >
-                <Icons.MessageCircle className="w-5 h-5" />
-                Enviar no WhatsApp
-            </button>
+            <p className="text-xs font-bold text-brand-400 uppercase text-center">Compartilhe seu link de convite</p>
 
-            <div 
+            <div
                 onClick={copyToClipboard}
                 className="bg-brand-900 border border-brand-600 rounded-xl p-3 flex items-center justify-between cursor-pointer hover:border-accent-primary transition-colors group"
             >

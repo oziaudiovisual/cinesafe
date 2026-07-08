@@ -77,7 +77,7 @@ export interface User {
   location: string;
   reputationPoints: number; // For ranking
   isVerified: boolean;
-  contactPhone?: string; // Public contact phone (WhatsApp)
+  contactPhone?: string; // Public contact phone
   role: 'admin' | 'user'; // RBAC field
   isBlocked?: boolean; // Access control
   checksCount?: number; // Total serial numbers checked (Lifetime)

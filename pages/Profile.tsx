@@ -53,7 +53,7 @@ export const Profile: React.FC = () => {
         if (!user) return;
         setLoading(true); setSuccessMsg(''); setErrorMsg('');
         if (!selectedUf || !selectedCity) { setErrorMsg("Selecione Estado e Cidade."); setLoading(false); return; }
-        if (!formData.contactPhone || formData.contactPhone.trim() === '') { setErrorMsg("O WhatsApp é obrigatório."); setLoading(false); return; }
+        if (!formData.contactPhone || formData.contactPhone.trim() === '') { setErrorMsg("O telefone é obrigatório."); setLoading(false); return; }
         
         const fullLocation = `${selectedCity} - ${selectedUf}`;
         let finalAvatarUrl = user.avatarUrl;
@@ -138,7 +138,7 @@ export const Profile: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-brand-400 uppercase ml-1">WhatsApp (DDD + Número)</label>
+                        <label className="text-xs font-bold text-brand-400 uppercase ml-1">Telefone (DDD + Número)</label>
                         <div className="relative group">
                             <Icons.MessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-500 w-5 h-5" />
                             <input type="tel" className="w-full glass-input rounded-xl py-3 pl-12 pr-4 text-white" placeholder="11999999999" value={formData.contactPhone} onChange={e => setFormData({ ...formData, contactPhone: e.target.value })} required />

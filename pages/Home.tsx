@@ -107,7 +107,7 @@ export const Home: React.FC = () => {
             </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {isProfileIncomplete && <ActionCard icon={Icons.User} color="warning" title="Complete seu Perfil" text="Adicione foto e WhatsApp para ganhar +100 XP e confiança." link="/profile" linkText="Atualizar Agora" />}
+            {isProfileIncomplete && <ActionCard icon={Icons.User} color="warning" title="Complete seu Perfil" text="Adicione foto e telefone para ganhar +100 XP e confiança." link="/profile" linkText="Atualizar Agora" />}
             {hasNoInventory && <ActionCard icon={Icons.Plus} color="primary" title="Proteja seus Itens" text="Seu inventário está vazio. Cadastre equipamentos para proteção." link="/inventory" linkText="Cadastrar Primeiro Item" />}
             {hasInventoryButNoRentals && <ActionCard icon={Icons.Banknote} color="green" title="Faça Renda Extra" text="Você tem itens parados. Coloque-os para alugar e lucre." link="/inventory" linkText="Ativar Aluguéis" />}
         </div>

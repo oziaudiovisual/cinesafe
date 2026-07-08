@@ -60,35 +60,12 @@ export const Notifications: React.FC = () => {
     }
   };
 
-  const openWhatsAppDirectly = (notif: Notification) => {
-    if (!notif.fromUserPhone) return;
-    const cleanPhone = notif.fromUserPhone.replace(/\D/g, '');
-    const message = encodeURIComponent(`Olá! Vi sua notificação no Cine Safe sobre o item ${notif.itemName || 'o equipamento'}.`);
-    window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank');
-  };
-
   const handleInAppChat = async (notif: Notification) => {
     if (!user) return;
     const chatId = await chatService.openChat(user, { id: notif.fromUserId, name: notif.fromUserName, avatarUrl: notif.fromUserAvatar || '' });
     navigate('/chat', { state: { openChatId: chatId } });
   };
 
-  const handleStartChat = (notif: Notification) => {
-    setModalConfig({
-        title: "Iniciar Conversa",
-        message: "Por segurança, esta notificação desaparecerá em 24 horas. Deseja continuar para o WhatsApp?",
-        confirmLabel: "Ir para WhatsApp",
-        action: async () => {
-            await notificationService.scheduleNotificationExpiry(notif.id);
-            openWhatsAppDirectly(notif);
-            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-            setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true, expiresAt } : n));
-            setModalOpen(false);
-        }
-    });
-    setModalOpen(true);
-  };
-  
   const handleConnectBack = async (notif: Notification) => {
     if (!user) return;
     setModalConfig({
@@ -223,12 +200,7 @@ export const Notifications: React.FC = () => {
                                     <div className="flex flex-wrap gap-3">
                                         {(notif.type === 'RENTAL_INTEREST' || notif.type === 'SALE_INTEREST' || notif.type === 'STOLEN_FOUND') && (
                                             <button onClick={(e) => { e.stopPropagation(); handleInAppChat(notif); }} className="px-4 py-2 bg-accent-primary hover:bg-cyan-300 text-brand-950 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors shadow-lg shadow-cyan-500/20">
-                                                <Icons.Mail className="w-4 h-4" /> Conversar no app
-                                            </button>
-                                        )}
-                                        {(notif.type === 'RENTAL_INTEREST' || notif.type === 'SALE_INTEREST' || notif.type === 'STOLEN_FOUND') && (
-                                            <button onClick={(e) => { e.stopPropagation(); handleStartChat(notif); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-500/20">
-                                                <Icons.MessageCircle className="w-4 h-4" /> Conversar no WhatsApp
+                                                <Icons.MessageCircle className="w-4 h-4" /> Conversar no app
                                             </button>
                                         )}
                                         {canConnectBack && (
