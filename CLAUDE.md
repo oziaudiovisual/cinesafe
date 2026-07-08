@@ -18,12 +18,11 @@ Uma mudança sem atualização de doc é **incompleta**. Esta regra é reforçad
 
 ## Regras rápidas
 
-- **Stack:** React 18 + TypeScript + Vite + Firebase (Auth/Firestore/Storage), **client-only**.
-  Sem backend próprio — as `firestore.rules`/`storage.rules` são a fronteira de segurança.
+- **Stack:** React 18 + TypeScript + Vite + Supabase (Auth/PostgreSQL/Storage), **client-only**.
+  Sem backend próprio — as RLS policies do Supabase são a fronteira de segurança.
 - **Acesso a dados só via `services/`.** Tipos só em [`types.ts`](types.ts).
 - **Não há testes nem lint** configurados. Valide rodando `npm run dev` e exercitando o
   fluxo afetado no browser antes de dizer que está pronto.
-- **Firestore rejeita `undefined`** — limpe os campos antes de gravar.
 - **Idioma:** código, comentários e UI em **pt-BR**.
 - **Não commitar/deployar sem pedido explícito** do usuário.
 

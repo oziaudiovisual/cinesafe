@@ -44,7 +44,7 @@ self.addEventListener('fetch', (event) => {
     // Skip external requests except fonts and CDN assets
     if (!url.origin.includes(self.location.origin) &&
         !url.href.includes('fonts.gstatic.com') &&
-        !url.href.includes('firebasestorage.googleapis.com')) {
+        !url.href.includes('wyropieferycysdohzos.supabase.co')) {
         return;
     }
 
@@ -85,8 +85,8 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // For images from Firebase Storage: Cache with long TTL
-    if (url.href.includes('firebasestorage.googleapis.com')) {
+    // For images from Supabase Storage: Cache with long TTL
+    if (url.href.includes('wyropieferycysdohzos.supabase.co/storage')) {
         event.respondWith(
             caches.match(request).then((cached) => {
                 if (cached) return cached;
