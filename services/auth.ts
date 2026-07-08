@@ -89,18 +89,6 @@ export const AuthService = {
     }
   },
 
-  loginWithApple: async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: { redirectTo: window.location.origin }
-      });
-      if (error) throw error;
-    } catch (e: any) {
-      console.error('Apple login error:', e);
-    }
-  },
-
   // --- REGISTER ---
 
   register: async (email: string, password: string, name: string, location: string, referralCode?: string): Promise<{ user: User | null; error?: string }> => {
