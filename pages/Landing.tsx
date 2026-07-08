@@ -85,7 +85,7 @@ export const Landing: React.FC = () => {
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.05] mb-5">
             Alugue, compre e proteja <br className="hidden md:block" />
-            <span className="text-transparent bg-clip-text bg-glow-text">equipamentos de cinema</span>
+            <span className="text-transparent bg-clip-text bg-glow-text">equipamentos de fotografia e vídeo</span>
           </h1>
           <p className="text-brand-300 text-lg max-w-2xl mx-auto mb-8">
             O marketplace dos profissionais de audiovisual: câmeras, lentes, drones e áudio de gente

@@ -15,7 +15,7 @@ const LayoutComponent: React.FC<LayoutProps> = ({ children }) => {
 
   const handleLogout = useCallback(async () => {
     await logout();
-    navigate('/login');
+    navigate('/'); // volta para a página principal (pública), não para o login
   }, [logout, navigate]);
 
   const navItems = useMemo(() => [
