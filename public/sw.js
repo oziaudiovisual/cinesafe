@@ -1,5 +1,5 @@
 // Service Worker for CineSafe - Aggressive Caching Strategy
-const CACHE_VERSION = 'cinesafe-v1';
+const CACHE_VERSION = 'cinesafe-v2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 
