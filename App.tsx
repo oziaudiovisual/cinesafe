@@ -21,6 +21,7 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(module =
 const SafetyMap = lazy(() => import('./pages/SafetyMap').then(module => ({ default: module.SafetyMap })));
 const Notifications = lazy(() => import('./pages/Notifications').then(module => ({ default: module.Notifications })));
 const Network = lazy(() => import('./pages/Network').then(module => ({ default: module.Network })));
+const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
 
 // Loading Component
 const PageLoader = () => (
@@ -46,6 +47,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
   return <Layout>{children}</Layout>;
 };
 
+// Root Route: public landing for visitors, personal dashboard for logged-in users.
+// The main page is open (like a marketplace storefront), but every actual feature
+// still lives behind ProtectedRoute, so using anything requires login/register.
+const RootRoute: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) return <PageLoader />;
+  if (!user) return <Landing />;
+
+  return <Layout><Home /></Layout>;
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -56,8 +69,10 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
 
+            {/* Public landing (open) for visitors; dashboard for logged-in users */}
+            <Route path="/" element={<RootRoute />} />
+
             {/* Protected Routes */}
-            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
             <Route path="/report-theft" element={<ProtectedRoute><TheftReport /></ProtectedRoute>} />
             <Route path="/rentals" element={<ProtectedRoute><Rentals /></ProtectedRoute>} />

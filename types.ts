@@ -49,7 +49,7 @@ export interface Equipment {
   purchaseDate: string;
   theftLocation?: Coordinates;
   theftDate?: string;
-  theftAddress?: string; // AI generated or reverse geocoded
+  theftAddress?: string; // Reverse geocoded (OpenStreetMap/Nominatim)
   pendingTransferTo?: string; // ID of user the transfer is pending to
   ownerProfile?: {
     name: string;

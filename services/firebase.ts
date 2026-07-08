@@ -1,5 +1,5 @@
 
-// Use compat import to ensure broad compatibility with the CDN-based environment in Google AI Studio
+// Use compat import to ensure broad compatibility across build/CDN environments
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { getFirestore } from 'firebase/firestore';

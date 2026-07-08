@@ -1,20 +1,22 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+<img width="1200" height="475" alt="CineSafe" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Cine Safe
 
-This contains everything you need to run your app locally.
+Plataforma para profissionais do audiovisual gerenciarem inventário, reportar roubos com geolocalização, verificar números de série e alugar/vender equipamentos.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1O3hFZ8vIOCDbX_dnL2WzTrrtjPwsgJ5E
+Stack: React + TypeScript + Vite + Firebase (Auth, Firestore, Storage) + Tailwind CSS.
 
-## Run Locally
+## Rodar localmente
 
-**Prerequisites:**  Node.js
+**Pré-requisitos:** Node.js 18+
 
-
-1. Install dependencies:
+1. Instale as dependências:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Rode o app em desenvolvimento:
    `npm run dev`
+3. Build de produção:
+   `npm run build`
+
+> A configuração do Firebase fica em `services/firebase.ts`.
