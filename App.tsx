@@ -5,25 +5,42 @@ import { Analytics } from '@vercel/analytics/react';
 import { Layout } from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// Lazy Load Pages
-// This improves initial load performance by splitting the code into chunks
-const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
-const Inventory = lazy(() => import('./pages/Inventory').then(module => ({ default: module.Inventory })));
-const TheftReport = lazy(() => import('./pages/TheftReport').then(module => ({ default: module.TheftReport })));
-const Rentals = lazy(() => import('./pages/Rentals').then(module => ({ default: module.Rentals })));
-const Sales = lazy(() => import('./pages/Sales').then(module => ({ default: module.Sales })));
-const SerialCheck = lazy(() => import('./pages/SerialCheck').then(module => ({ default: module.SerialCheck })));
-const Rankings = lazy(() => import('./pages/Rankings').then(module => ({ default: module.Rankings })));
-const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
-const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
-const Profile = lazy(() => import('./pages/Profile').then(module => ({ default: module.Profile })));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
-const SafetyMap = lazy(() => import('./pages/SafetyMap').then(module => ({ default: module.SafetyMap })));
-const Notifications = lazy(() => import('./pages/Notifications').then(module => ({ default: module.Notifications })));
-const Network = lazy(() => import('./pages/Network').then(module => ({ default: module.Network })));
-const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
-const Chat = lazy(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
-const Contracts = lazy(() => import('./pages/Contracts').then(module => ({ default: module.Contracts })));
+// Carrega uma página em chunk separado. Se o chunk falhar (deploy novo trocou os
+// hashes, ou service worker/CDN servindo HTML antigo), recarrega a página UMA vez
+// para pegar o index.html + chunks atuais. Se falhar de novo logo em seguida,
+// deixa o ErrorBoundary mostrar uma tela amigável — nunca uma tela preta.
+const lazyWithReload = (factory: () => Promise<{ default: React.ComponentType<any> }>) =>
+  lazy(() =>
+    factory().catch((err: unknown) => {
+      const now = Date.now();
+      const last = Number(sessionStorage.getItem('chunkReloadAt') || '0');
+      if (now - last > 10000) {
+        sessionStorage.setItem('chunkReloadAt', String(now));
+        window.location.reload();
+        return new Promise<{ default: React.ComponentType<any> }>(() => {});
+      }
+      throw err;
+    })
+  );
+
+// Lazy Load Pages (code-splitting para melhorar o carregamento inicial)
+const Home = lazyWithReload(() => import('./pages/Home').then(module => ({ default: module.Home })));
+const Inventory = lazyWithReload(() => import('./pages/Inventory').then(module => ({ default: module.Inventory })));
+const TheftReport = lazyWithReload(() => import('./pages/TheftReport').then(module => ({ default: module.TheftReport })));
+const Rentals = lazyWithReload(() => import('./pages/Rentals').then(module => ({ default: module.Rentals })));
+const Sales = lazyWithReload(() => import('./pages/Sales').then(module => ({ default: module.Sales })));
+const SerialCheck = lazyWithReload(() => import('./pages/SerialCheck').then(module => ({ default: module.SerialCheck })));
+const Rankings = lazyWithReload(() => import('./pages/Rankings').then(module => ({ default: module.Rankings })));
+const Login = lazyWithReload(() => import('./pages/Login').then(module => ({ default: module.Login })));
+const Register = lazyWithReload(() => import('./pages/Register').then(module => ({ default: module.Register })));
+const Profile = lazyWithReload(() => import('./pages/Profile').then(module => ({ default: module.Profile })));
+const AdminDashboard = lazyWithReload(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const SafetyMap = lazyWithReload(() => import('./pages/SafetyMap').then(module => ({ default: module.SafetyMap })));
+const Notifications = lazyWithReload(() => import('./pages/Notifications').then(module => ({ default: module.Notifications })));
+const Network = lazyWithReload(() => import('./pages/Network').then(module => ({ default: module.Network })));
+const Landing = lazyWithReload(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
+const Chat = lazyWithReload(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
+const Contracts = lazyWithReload(() => import('./pages/Contracts').then(module => ({ default: module.Contracts })));
 
 // Loading Component
 const PageLoader = () => (
@@ -61,10 +78,44 @@ const RootRoute: React.FC = () => {
   return <Layout><Home /></Layout>;
 };
 
+// Rede de segurança final: se qualquer rota estourar um erro (ex.: chunk que não
+// carrega mesmo após o reload), mostra uma tela amigável com botão de recarregar,
+// em vez de uma tela preta.
+class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.error('Erro ao carregar a página:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-brand-950 flex flex-col items-center justify-center text-center p-6">
+          <p className="text-white font-bold text-lg mb-2">Não foi possível carregar esta página.</p>
+          <p className="text-brand-400 text-sm mb-6 max-w-sm">Isso costuma ser uma atualização recente do app. Recarregue para continuar.</p>
+          <button
+            onClick={() => { sessionStorage.removeItem('chunkReloadAt'); window.location.reload(); }}
+            className="px-6 py-3 rounded-xl bg-accent-primary text-brand-950 font-bold hover:bg-cyan-300 transition-colors"
+          >
+            Recarregar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   return (
     <AuthProvider>
       <HashRouter>
+        <RouteErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Public Routes */}
@@ -92,6 +143,7 @@ function App() {
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />
           </Routes>
         </Suspense>
+        </RouteErrorBoundary>
       </HashRouter>
       <Analytics />
     </AuthProvider>

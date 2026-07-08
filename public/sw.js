@@ -1,5 +1,5 @@
-// Service Worker for CineSafe - Aggressive Caching Strategy
-const CACHE_VERSION = 'cinesafe-v2';
+// Service Worker for CineSafe
+const CACHE_VERSION = 'cinesafe-v3';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 
@@ -69,8 +69,14 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             caches.match(request).then((cached) => {
                 const fetchPromise = fetch(request).then((response) => {
-                    const clone = response.clone();
-                    caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+                    // Nunca cacheia resposta que não seja o asset real (ex.: HTML de
+                    // fallback quando um chunk antigo já não existe no servidor) —
+                    // evita envenenar o cache e servir HTML no lugar de JS.
+                    const ct = response.headers.get('content-type') || '';
+                    if (response.ok && response.status === 200 && !ct.includes('text/html')) {
+                        const clone = response.clone();
+                        caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+                    }
                     return response;
                 });
                 return cached || fetchPromise;
