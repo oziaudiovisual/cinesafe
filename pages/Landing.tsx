@@ -167,6 +167,7 @@ export const Landing: React.FC = () => {
               </button>
             </div>
           ) : (
+            <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.slice(0, 6).map((item, index) => {
                 return (
@@ -185,12 +186,10 @@ export const Landing: React.FC = () => {
                           <span className="text-xs text-brand-300 font-mono">{item.model}</span>
                         </div>
                       </div>
-                      {/* Etiquetas: o mesmo item pode estar para aluguel E venda */}
                       <div className="absolute top-4 left-4 flex flex-col gap-1.5 items-start">
                         {item.isForRent && <span className="bg-accent-primary text-brand-950 text-[10px] font-bold px-2 py-1 rounded-md shadow-lg">ALUGUEL</span>}
                         {item.isForSale && <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg">VENDA</span>}
                       </div>
-                      {/* Preços correspondentes */}
                       <div className="absolute top-4 right-4 flex flex-col gap-1.5 items-end">
                         {item.isForRent && (
                           <span className="bg-accent-primary text-brand-950 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
@@ -226,7 +225,6 @@ export const Landing: React.FC = () => {
               })}
             </div>
 
-            {/* CTA para ver todos */}
             {filtered.length > 6 && (
               <div className="text-center mt-8">
                 <button onClick={goToRegister} className="px-8 py-3 rounded-xl bg-white/5 text-white font-bold border border-white/10 hover:bg-accent-primary/10 hover:border-accent-primary/30 transition-all inline-flex items-center gap-2">
@@ -234,7 +232,7 @@ export const Landing: React.FC = () => {
                 </button>
               </div>
             )}
-            </div>
+            </>
           )}
         </section>
 
