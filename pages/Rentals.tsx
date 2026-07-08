@@ -51,16 +51,14 @@ export const Rentals: React.FC = () => {
     useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500); return () => clearTimeout(timer); }, [searchQuery]);
     useEffect(() => { if (selectedUf) { setLoadingCities(true); IBGEService.getCitiesByUF(selectedUf).then(data => { setCities(data); setLoadingCities(false); setSelectedCity(''); }); } else { setCities([]); setSelectedCity(''); } }, [selectedUf]);
     
-    // Reset when filters change
-    useEffect(() => { 
-        setRentals([]); 
+    // Reset quando filtros/busca mudam
+    useEffect(() => {
+        setRentals([]);
         setLastDoc(null);
         setHasMore(true);
-        // We need to trigger the first fetch after reset.
-        // Using a timeout to ensure state is cleared or use a separate "resetAndFetch" function.
-        // A cleaner way is to call fetchRentals(true) directly here.
-        fetchRentals(true);
-    }, [filterCategory, selectedUf, selectedCity]); // Removed debouncedSearch from query trigger as we can't search text effectively server side
+        if (debouncedSearch.trim()) runSearch();
+        else fetchRentals(true);
+    }, [filterCategory, selectedUf, selectedCity, debouncedSearch]);
 
     const fetchRentals = async (isReset: boolean = false) => {
         if (isFetching) return;
@@ -82,6 +80,23 @@ export const Rentals: React.FC = () => {
             setRentals(prev => isReset ? result.data : [...prev, ...result.data]);
             setLastDoc(result.lastDoc);
             setHasMore(result.hasMore);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsFetching(false);
+        }
+    };
+
+    const runSearch = async () => {
+        setIsFetching(true);
+        try {
+            const results = await equipmentService.searchMarketplace('isForRent', debouncedSearch, {
+                category: filterCategory || undefined,
+                uf: selectedUf || undefined,
+                city: selectedCity || undefined,
+            });
+            setRentals(results);
+            setHasMore(false);
         } catch (error) {
             console.error(error);
         } finally {
@@ -128,12 +143,9 @@ export const Rentals: React.FC = () => {
                     </h1>
                     <p className="text-brand-400 mt-1">Encontre o que você precisa perto de você.</p>
                 </div>
-                {/* Search Bar Removed or disabled as per instructions to rely on native pagination/filters, 
-                    or kept visual but functionality limited until full text search service is added. 
-                    I'll keep the UI but show a tooltip or make it clear it's limited. */}
-                <div className="relative w-full md:w-96 group opacity-50 pointer-events-none" title="Busca textual temporariamente desativada para otimização">
+                <div className="relative w-full md:w-96 group">
                     <Icons.Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-500 w-5 h-5 group-focus-within:text-accent-secondary transition-colors" />
-                    <input type="text" disabled className="w-full glass-input rounded-xl py-3 pl-12 pr-4 text-sm" placeholder="Busca textual em manutenção..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <input type="text" className="w-full glass-input rounded-xl py-3 pl-12 pr-4 text-sm" placeholder="Buscar por nome, marca ou modelo..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                 </div>
             </header>
 

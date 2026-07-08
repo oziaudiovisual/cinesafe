@@ -50,13 +50,14 @@ export const Sales: React.FC = () => {
     useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500); return () => clearTimeout(timer); }, [searchQuery]);
     useEffect(() => { if (selectedUf) { setLoadingCities(true); IBGEService.getCitiesByUF(selectedUf).then(data => { setCities(data); setLoadingCities(false); setSelectedCity(''); }); } else { setCities([]); setSelectedCity(''); } }, [selectedUf]);
     
-    // Reset on filter change
-    useEffect(() => { 
-        setItems([]); 
+    // Reset quando filtros/busca mudam
+    useEffect(() => {
+        setItems([]);
         setLastDoc(null);
         setHasMore(true);
-        fetchSales(true); 
-    }, [filterCategory, selectedUf, selectedCity]);
+        if (debouncedSearch.trim()) runSearch();
+        else fetchSales(true);
+    }, [filterCategory, selectedUf, selectedCity, debouncedSearch]);
 
     const fetchSales = async (isReset: boolean = false) => {
         if (isFetching) return;
@@ -75,6 +76,23 @@ export const Sales: React.FC = () => {
             setItems(prev => isReset ? result.data : [...prev, ...result.data]);
             setLastDoc(result.lastDoc);
             setHasMore(result.hasMore);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsFetching(false);
+        }
+    };
+
+    const runSearch = async () => {
+        setIsFetching(true);
+        try {
+            const results = await equipmentService.searchMarketplace('isForSale', debouncedSearch, {
+                category: filterCategory || undefined,
+                uf: selectedUf || undefined,
+                city: selectedCity || undefined,
+            });
+            setItems(results);
+            setHasMore(false);
         } catch (error) {
             console.error(error);
         } finally {
@@ -115,9 +133,9 @@ export const Sales: React.FC = () => {
                     </h1>
                     <p className="text-brand-400 mt-1">Oportunidades únicas de profissionais verificados.</p>
                 </div>
-                <div className="relative w-full md:w-96 group opacity-50 pointer-events-none" title="Busca textual temporariamente desativada">
+                <div className="relative w-full md:w-96 group">
                     <Icons.Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-500 w-5 h-5 group-focus-within:text-green-500 transition-colors" />
-                    <input type="text" disabled className="w-full glass-input rounded-xl py-3 pl-12 pr-4 text-sm" placeholder="Busca textual em manutenção..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <input type="text" className="w-full glass-input rounded-xl py-3 pl-12 pr-4 text-sm" placeholder="Buscar por nome, marca ou modelo..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                 </div>
             </header>
 

@@ -180,6 +180,39 @@ export const equipmentService = {
     return equipmentService._getMarketplaceItems('isForSale', lastDoc, limit, filters);
   },
 
+  // Busca textual por trecho (substring, case-insensitive) sobre um lote do
+  // marketplace. Sem serviço externo e sem migração: funciona em todos os itens.
+  // Limitação: cobre os primeiros ~120 itens do filtro (suficiente enquanto o
+  // catálogo é pequeno; acima disso, migrar para full-text externo).
+  searchMarketplace: async (
+    filterField: 'isForRent' | 'isForSale',
+    queryText: string,
+    filters: MarketplaceFilters = {}
+  ): Promise<Equipment[]> => {
+    const q = query(
+      collection(db, 'equipment'),
+      where(filterField, '==', true),
+      where('status', '==', 'SAFE'),
+      orderBy('id'),
+      limit(120)
+    );
+    const snap = await getDocs(q);
+    let items = snap.docs.map(d => d.data() as Equipment);
+
+    const needle = (queryText || '').trim().toLowerCase();
+    if (needle) {
+      items = items.filter(it => `${it.name} ${it.brand} ${it.model}`.toLowerCase().includes(needle));
+    }
+    if (filters.category) {
+      items = items.filter(it => it.category === filters.category);
+    }
+    if (filters.uf || filters.city) {
+      const loc = (filters.city || filters.uf || '').toLowerCase();
+      items = items.filter(it => it.ownerProfile?.location?.toLowerCase().includes(loc));
+    }
+    return items;
+  },
+
   uploadEquipmentImage: async (file: File, ownerId: string): Promise<string | null> => {
     const optimizedBlob = await processImageForWebP(file);
     const fileName = `users/${ownerId}/equipment/${Date.now()}.webp`;
