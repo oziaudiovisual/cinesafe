@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -7,6 +8,7 @@ import { AdBanner } from '../components/AdBanner';
 import { notificationService } from '../services/notificationService';
 import { userService } from '../services/userService';
 import { equipmentService } from '../services/equipmentService';
+import { chatService } from '../services/chatService';
 import { useAd } from '../hooks/useAd';
 
 const NotificationTimer: React.FC<{ expiresAt: string; onExpire: () => void }> = ({ expiresAt, onExpire }) => {
@@ -34,6 +36,7 @@ const NotificationTimer: React.FC<{ expiresAt: string; onExpire: () => void }> =
 
 export const Notifications: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { ad } = useAd();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [myConnections, setMyConnections] = useState<User[]>([]);
@@ -62,6 +65,12 @@ export const Notifications: React.FC = () => {
     const cleanPhone = notif.fromUserPhone.replace(/\D/g, '');
     const message = encodeURIComponent(`Olá! Vi sua notificação no Cine Safe sobre o item ${notif.itemName || 'o equipamento'}.`);
     window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank');
+  };
+
+  const handleInAppChat = async (notif: Notification) => {
+    if (!user) return;
+    const chatId = await chatService.openChat(user, { id: notif.fromUserId, name: notif.fromUserName, avatarUrl: notif.fromUserAvatar || '' });
+    navigate('/chat', { state: { openChatId: chatId } });
   };
 
   const handleStartChat = (notif: Notification) => {
@@ -211,6 +220,11 @@ export const Notifications: React.FC = () => {
                                     )}
 
                                     <div className="flex flex-wrap gap-3">
+                                        {(notif.type === 'RENTAL_INTEREST' || notif.type === 'SALE_INTEREST' || notif.type === 'STOLEN_FOUND') && (
+                                            <button onClick={(e) => { e.stopPropagation(); handleInAppChat(notif); }} className="px-4 py-2 bg-accent-primary hover:bg-cyan-300 text-brand-950 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors shadow-lg shadow-cyan-500/20">
+                                                <Icons.Mail className="w-4 h-4" /> Conversar no app
+                                            </button>
+                                        )}
                                         {(notif.type === 'RENTAL_INTEREST' || notif.type === 'SALE_INTEREST' || notif.type === 'STOLEN_FOUND') && (
                                             <button onClick={(e) => { e.stopPropagation(); handleStartChat(notif); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-500/20">
                                                 <Icons.MessageCircle className="w-4 h-4" /> Conversar no WhatsApp

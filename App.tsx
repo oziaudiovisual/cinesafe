@@ -22,6 +22,7 @@ const SafetyMap = lazy(() => import('./pages/SafetyMap').then(module => ({ defau
 const Notifications = lazy(() => import('./pages/Notifications').then(module => ({ default: module.Notifications })));
 const Network = lazy(() => import('./pages/Network').then(module => ({ default: module.Network })));
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
+const Chat = lazy(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
 
 // Loading Component
 const PageLoader = () => (
@@ -83,6 +84,7 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
+            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
 
             {/* Admin Route */}
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />

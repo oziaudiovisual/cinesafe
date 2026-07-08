@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { userService } from '../services/userService';
 import { notificationService } from '../services/notificationService';
+import { chatService } from '../services/chatService';
 import { useAuth } from '../context/AuthContext';
 import { User, Notification } from '../types';
 import { Icons } from '../components/Icons';
@@ -8,6 +10,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Network: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [connections, setConnections] = useState<User[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<User[]>([]);
@@ -63,6 +66,12 @@ export const Network: React.FC = () => {
         setModalOpen(true);
     };
     
+    const handleMessage = async (targetUser: User) => {
+        if (!user) return;
+        const chatId = await chatService.openChat(user, { id: targetUser.id, name: targetUser.name, avatarUrl: targetUser.avatarUrl });
+        navigate('/chat', { state: { openChatId: chatId } });
+    };
+
     const handleModalConfirm = async () => { setModalProcessing(true); await modalConfig.action(); setModalProcessing(false); };
     const isConnected = (targetId: string) => connections.some(c => c.id === targetId);
 
@@ -153,9 +162,14 @@ export const Network: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
-                                <button onClick={() => handleDisconnect(conn)} className="text-brand-600 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition-colors" title="Desconectar">
-                                    <Icons.Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => handleMessage(conn)} className="text-brand-400 hover:text-accent-primary p-2 rounded-lg hover:bg-accent-primary/10 transition-colors" title="Enviar mensagem">
+                                        <Icons.Mail className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDisconnect(conn)} className="text-brand-600 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition-colors" title="Desconectar">
+                                        <Icons.Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
