@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { contractService } from '../services/contractService';
@@ -16,12 +16,14 @@ const STATUS_META: Record<ContractStatus, { label: string; cls: string }> = {
 
 const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const day = (s?: string) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
+const paymentLabel = (s?: string) => (s === 'confirmed' ? 'Pagamento confirmado' : s === 'submitted' ? 'Comprovante enviado' : 'Pagamento pendente');
+const paymentCls = (s?: string) => (s === 'confirmed' ? 'text-green-400' : s === 'submitted' ? 'text-blue-400' : 'text-amber-400');
 
 export const Contracts: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [detail, setDetail] = useState<Contract | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState<{ title: string; message: string; confirmLabel: string; isDestructive?: boolean; action: () => Promise<void> }>({ title: '', message: '', confirmLabel: '', action: async () => {} });
@@ -33,6 +35,9 @@ export const Contracts: React.FC = () => {
   }, [user]);
 
   if (!user) return null;
+
+  // Deriva do estado ao vivo para o detalhe atualizar após anexar/confirmar pagamento.
+  const detail = contracts.find(c => c.id === detailId) || null;
 
   const otherParty = (c: Contract) => (c.ownerId === user.id
     ? { name: c.counterpartyName, avatar: c.counterpartyAvatar }
@@ -81,10 +86,16 @@ export const Contracts: React.FC = () => {
             {c.type === 'rental' && (
               <p className="text-xs text-brand-500 mt-1 flex items-center gap-1"><Icons.Calendar className="w-3 h-3" /> Retirada {day(c.pickupDate)} → Devolução {day(c.returnDate)}</p>
             )}
+            {['proposed', 'active', 'completed'].includes(c.status) && (
+              <p className="text-xs mt-1 flex items-center gap-1">
+                <Icons.Banknote className="w-3 h-3 text-brand-500" />
+                <span className={paymentCls(c.paymentStatus)}>{paymentLabel(c.paymentStatus)}</span>
+              </p>
+            )}
           </div>
         </div>
         <div className="px-5 pb-4 flex flex-wrap gap-2">
-          <button onClick={() => setDetail(c)} className="text-xs font-bold bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg border border-white/10 flex items-center gap-2"><Icons.FileText className="w-3.5 h-3.5" /> Ver / Imprimir</button>
+          <button onClick={() => setDetailId(c.id)} className="text-xs font-bold bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg border border-white/10 flex items-center gap-2"><Icons.FileText className="w-3.5 h-3.5" /> Ver / Imprimir</button>
           {c.chatId && <button onClick={() => navigate('/chat', { state: { openChatId: c.chatId } })} className="text-xs font-bold bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg border border-white/10 flex items-center gap-2"><Icons.MessageCircle className="w-3.5 h-3.5" /> Conversa</button>}
           {c.status === 'proposed' && !iAmOwner(c) && (
             <>
@@ -136,13 +147,29 @@ export const Contracts: React.FC = () => {
         </div>
       )}
 
-      {detail && <ContractDetail contract={detail} currentUserId={user.id} onClose={() => setDetail(null)} />}
+      {detail && <ContractDetail contract={detail} currentUserId={user.id} onClose={() => setDetailId(null)} />}
     </div>
   );
 };
 
-const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onClose: () => void }> = ({ contract: c, onClose }) => {
+const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onClose: () => void }> = ({ contract: c, currentUserId, onClose }) => {
   const st = STATUS_META[c.status];
+  const isReceiver = c.ownerId === currentUserId;     // dono do item recebe o pagamento
+  const isPayer = c.counterpartyId === currentUserId; // locatário/comprador paga
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const canManagePayment = ['proposed', 'active', 'completed'].includes(c.status);
+
+  const handleAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    await contractService.attachPaymentProof(c, file, currentUserId);
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+  const handleConfirm = async () => { await contractService.confirmPayment(c.id); };
+
   return (
     <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-brand-950/90 backdrop-blur-xl animate-fade-in" onClick={onClose}>
       <div className="glass-card max-w-lg w-full p-8 rounded-[2rem] relative border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
@@ -161,6 +188,7 @@ const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onCl
             <Row label="Valor" value={brl(c.value)} />
             {c.type === 'rental' && <Row label="Retirada" value={day(c.pickupDate)} />}
             {c.type === 'rental' && <Row label="Devolução" value={day(c.returnDate)} />}
+            <Row label="Pagamento" value={paymentLabel(c.paymentStatus)} />
             <Row label="Criado em" value={new Date(c.createdAt).toLocaleString('pt-BR')} />
           </dl>
 
@@ -168,6 +196,35 @@ const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onCl
             Este documento registra o acordo entre as partes dentro da plataforma Cine Safe. {c.type === 'sale' ? 'A aceitação transfere a propriedade do equipamento ao comprador no sistema.' : 'O locatário se compromete a devolver o equipamento na data acordada.'}
           </p>
         </div>
+
+        {/* Comprovante de pagamento (flexível: antes ou depois) */}
+        {canManagePayment && (
+          <div className="mt-6 pt-4 border-t border-white/10 print:hidden">
+            <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2"><Icons.Banknote className="w-4 h-4 text-accent-primary" /> Comprovante de pagamento</h3>
+            <p className="text-xs mb-3">
+              <span className={paymentCls(c.paymentStatus)}>{paymentLabel(c.paymentStatus)}</span>
+              {c.paymentAt && c.paymentStatus ? <span className="text-brand-500"> · {new Date(c.paymentAt).toLocaleDateString('pt-BR')}</span> : null}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {c.paymentProofUrl && (
+                <a href={c.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg border border-white/10 flex items-center gap-2"><Icons.FileText className="w-3.5 h-3.5" /> Ver comprovante</a>
+              )}
+              {isPayer && c.paymentStatus !== 'confirmed' && (
+                <>
+                  <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleAttach} />
+                  <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs font-bold bg-accent-primary hover:bg-cyan-300 text-brand-950 px-3 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                    {uploading ? 'Enviando...' : (c.paymentProofUrl ? 'Trocar comprovante' : 'Anexar comprovante')}
+                  </button>
+                </>
+              )}
+              {isReceiver && c.paymentStatus === 'submitted' && (
+                <button onClick={handleConfirm} className="text-xs font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg flex items-center gap-2"><Icons.CheckCircle className="w-3.5 h-3.5" /> Confirmar recebimento</button>
+              )}
+            </div>
+            {isPayer && <p className="text-[11px] text-brand-500 mt-2">Anexe o comprovante quando pagar {c.ownerName} — pode ser antes da retirada ou depois, como vocês combinarem.</p>}
+            {isReceiver && c.paymentStatus === 'submitted' && <p className="text-[11px] text-brand-500 mt-2">Confira o comprovante enviado e confirme o recebimento.</p>}
+          </div>
+        )}
 
         <button onClick={() => window.print()} className="w-full mt-6 bg-accent-primary hover:bg-cyan-300 text-brand-950 font-bold py-3 rounded-xl flex items-center justify-center gap-2 print:hidden">
           <Icons.FileText className="w-4 h-4" /> Imprimir / Salvar PDF

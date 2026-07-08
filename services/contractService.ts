@@ -1,10 +1,11 @@
-import { db } from './firebase';
+import { db, storage } from './firebase';
 import {
   collection, doc, setDoc, updateDoc,
   query, where, onSnapshot
 } from 'firebase/firestore';
 import { Contract, EquipmentStatus, Equipment, User } from '../types';
 import { equipmentService } from './equipmentService';
+import { processImageForWebP, resilientUpload } from '../utils/imageProcessor';
 
 interface CreateContractInput {
   type: 'rental' | 'sale';
@@ -114,6 +115,40 @@ export const contractService = {
       return true;
     } catch (e) {
       console.error('completeRental error:', e);
+      return false;
+    }
+  },
+
+  // Quem paga anexa o comprovante (imagem ou PDF). Pode ser antes ou depois.
+  attachPaymentProof: async (contract: Contract, file: File, uploaderId: string): Promise<boolean> => {
+    try {
+      const isPdf = file.type === 'application/pdf';
+      const blob: Blob = isPdf ? file : await processImageForWebP(file);
+      const ext = isPdf ? 'pdf' : 'webp';
+      const path = `contracts/${contract.id}/payment_${Date.now()}.${ext}`;
+      const url = await resilientUpload(storage.ref(path), blob);
+      if (!url) return false;
+      await updateDoc(doc(db, 'contracts', contract.id), {
+        paymentProofUrl: url,
+        paymentStatus: 'submitted',
+        paymentSubmittedBy: uploaderId,
+        paymentAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      return true;
+    } catch (e) {
+      console.error('attachPaymentProof error:', e);
+      return false;
+    }
+  },
+
+  // Quem recebe confirma o pagamento.
+  confirmPayment: async (contractId: string): Promise<boolean> => {
+    try {
+      await updateDoc(doc(db, 'contracts', contractId), { paymentStatus: 'confirmed', updatedAt: new Date().toISOString() });
+      return true;
+    } catch (e) {
+      console.error('confirmPayment error:', e);
       return false;
     }
   },

@@ -160,6 +160,11 @@ export interface Contract {
   pickupDate?: string;  // aluguel: dia da retirada (ISO date)
   returnDate?: string;  // aluguel: dia da devolução (ISO date)
   chatId?: string;      // liga o contrato à conversa
+  // Pagamento (flexível: pode ser anexado antes ou depois). Sem status = pendente.
+  paymentStatus?: 'submitted' | 'confirmed';
+  paymentProofUrl?: string;   // comprovante (imagem/PDF) no Storage
+  paymentSubmittedBy?: string;
+  paymentAt?: string;
   createdAt: string;
   updatedAt: string;
 }
