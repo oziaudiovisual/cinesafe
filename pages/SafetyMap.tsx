@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { userService } from '../services/userService';
+import { contractService } from '../services/contractService';
+import { ReturnAlert } from '../types';
 import { Icons } from '../components/Icons';
 
 interface ReportPoint {
@@ -19,8 +21,14 @@ export const SafetyMap: React.FC = () => {
   const [reports, setReports] = useState<ReportPoint[]>([]);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [recentThefts, setRecentThefts] = useState<ReportPoint[]>([]);
+  const [alerts, setAlerts] = useState<ReturnAlert[]>([]);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+
+  useEffect(() => {
+    const unsub = contractService.subscribeCommunityAlerts(setAlerts);
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -204,6 +212,32 @@ export const SafetyMap: React.FC = () => {
             </div>
         </div>
 
+      </div>
+
+      {/* Alertas de não-devolução (comunidade) */}
+      <div className="bg-brand-800 p-6 rounded-xl border border-red-500/20">
+        <h2 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+          <Icons.AlertTriangle className="w-5 h-5 text-red-400" /> Alertas de não-devolução
+        </h2>
+        <p className="text-brand-400 text-sm mb-4">Equipamentos alugados e não devolvidos, reportados pela comunidade a partir de contratos.</p>
+        {alerts.length === 0 ? (
+          <p className="text-brand-500 text-sm text-center py-4">Nenhum alerta ativo na comunidade.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {alerts.map(a => (
+              <div key={a.id} className="flex items-center gap-3 p-3 bg-brand-900/60 rounded-lg border border-red-500/20">
+                <div className="w-11 h-11 rounded-full bg-brand-800 overflow-hidden border border-red-500/30 shrink-0">
+                  {a.renterAvatar ? <img src={a.renterAvatar} alt={a.renterName} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-brand-400"><Icons.User className="w-5 h-5" /></div>}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white font-bold text-sm truncate">{a.renterName}</p>
+                  <p className="text-red-300 text-xs">não devolveu <span className="font-bold">{a.equipmentName}</span></p>
+                  <p className="text-brand-500 text-[10px] mt-0.5">Combinado p/ {a.agreedReturnDate ? new Date(a.agreedReturnDate).toLocaleDateString('pt-BR') : '—'} · reportado por {a.ownerName}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

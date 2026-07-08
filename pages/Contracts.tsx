@@ -18,6 +18,13 @@ const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency',
 const day = (s?: string) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
 const paymentLabel = (s?: string) => (s === 'confirmed' ? 'Pagamento confirmado' : s === 'submitted' ? 'Comprovante enviado' : 'Pagamento pendente');
 const paymentCls = (s?: string) => (s === 'confirmed' ? 'text-green-400' : s === 'submitted' ? 'text-blue-400' : 'text-amber-400');
+const GRACE_MS = 48 * 60 * 60 * 1000; // prazo antes de poder emitir alerta público
+const overdueDays = (c: Contract) => {
+  if (c.type !== 'rental' || c.status !== 'active' || !c.returnDate) return 0;
+  const diff = Date.now() - new Date(c.returnDate + 'T23:59:59').getTime();
+  return diff > 0 ? Math.ceil(diff / 86400000) : 0;
+};
+const graceOver = (c: Contract) => !!c.overdueNoticeAt && (Date.now() - new Date(c.overdueNoticeAt).getTime() >= GRACE_MS);
 
 export const Contracts: React.FC = () => {
   const { user } = useAuth();
@@ -61,6 +68,8 @@ export const Contracts: React.FC = () => {
   const onDecline = (c: Contract) => ask('Recusar contrato', `Recusar a proposta de "${c.equipmentName}"?`, 'Recusar', async () => { await contractService.closeContract(c, 'declined'); }, true);
   const onCancel = (c: Contract) => ask('Cancelar contrato', `Cancelar sua proposta de "${c.equipmentName}"?`, 'Cancelar proposta', async () => { await contractService.closeContract(c, 'cancelled'); }, true);
   const onComplete = (c: Contract) => ask('Concluir aluguel', `Marcar o aluguel de "${c.equipmentName}" como devolvido/concluído?`, 'Concluir', async () => { await contractService.completeRental(c); });
+  const onNotifyOverdue = (c: Contract) => ask('Notificar atraso', `Avisar ${c.counterpartyName} de que "${c.equipmentName}" está atrasado? Ele terá um prazo (48h) para resolver antes de qualquer alerta público.`, 'Notificar', async () => { await contractService.sendOverdueNotice(c, user); });
+  const onPublicAlert = (c: Contract) => ask('Emitir alerta público', `Isto torna PÚBLICO à comunidade que ${c.counterpartyName} não devolveu "${c.equipmentName}". É uma ação séria, visível a todos, e fica no perfil dele até a devolução. Confirmar?`, 'Emitir alerta', async () => { await contractService.raisePublicAlert(c, user); }, true);
 
   const pendingForMe = contracts.filter(c => c.status === 'proposed' && !iAmOwner(c));
   const sentByMe = contracts.filter(c => c.status === 'proposed' && iAmOwner(c));
@@ -92,6 +101,12 @@ export const Contracts: React.FC = () => {
                 <span className={paymentCls(c.paymentStatus)}>{paymentLabel(c.paymentStatus)}</span>
               </p>
             )}
+            {overdueDays(c) > 0 && (
+              <p className="text-xs mt-1 flex items-center gap-1 text-red-400 font-bold">
+                <Icons.AlertTriangle className="w-3 h-3" /> Atrasado há {overdueDays(c)} dia{overdueDays(c) > 1 ? 's' : ''}
+                {c.publicAlert && <span className="text-red-500 uppercase ml-1">· Alerta público</span>}
+              </p>
+            )}
           </div>
         </div>
         <div className="px-5 pb-4 flex flex-wrap gap-2">
@@ -106,8 +121,17 @@ export const Contracts: React.FC = () => {
           {c.status === 'proposed' && iAmOwner(c) && (
             <button onClick={() => onCancel(c)} className="text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-lg border border-red-500/20">Cancelar proposta</button>
           )}
-          {c.status === 'active' && c.type === 'rental' && (
+          {c.status === 'active' && c.type === 'rental' && iAmOwner(c) && (
             <button onClick={() => onComplete(c)} className="text-xs font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg flex items-center gap-2"><Icons.CheckCircle className="w-3.5 h-3.5" /> Marcar como devolvido</button>
+          )}
+          {c.status === 'active' && c.type === 'rental' && iAmOwner(c) && overdueDays(c) > 0 && !c.publicAlert && (
+            !c.overdueNoticeAt ? (
+              <button onClick={() => onNotifyOverdue(c)} className="text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-3 py-2 rounded-lg border border-amber-500/20 flex items-center gap-2"><Icons.AlertTriangle className="w-3.5 h-3.5" /> Notificar atraso</button>
+            ) : graceOver(c) ? (
+              <button onClick={() => onPublicAlert(c)} className="text-xs font-bold bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg flex items-center gap-2"><Icons.Siren className="w-3.5 h-3.5" /> Emitir alerta público</button>
+            ) : (
+              <span className="text-xs font-medium text-amber-400/80 px-2 py-2 flex items-center gap-1"><Icons.Clock className="w-3.5 h-3.5" /> Aviso enviado · aguardando prazo</span>
+            )
           )}
         </div>
       </div>

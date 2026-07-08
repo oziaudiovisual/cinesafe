@@ -16,6 +16,9 @@ service cloud.firestore {
       return isSignedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+    function contractData(cid) {
+      return get(/databases/$(database)/documents/contracts/$(cid)).data;
+    }
 
     // ---- USERS ----
     // Perfis são legíveis por usuários autenticados (rede, ranking, admin).
@@ -125,6 +128,20 @@ service cloud.firestore {
         && request.auth.uid == request.resource.data.ownerId
         && request.auth.uid in request.resource.data.parties;
       allow update: if isSignedIn() && request.auth.uid in resource.data.parties;
+      allow delete: if false;
+    }
+
+    // ---- RETURN_ALERTS ---- (alertas públicos de não-devolução)
+    match /return_alerts/{alertId} {
+      allow read: if true; // público: comunidade e perfil do locatário
+      // Só o dono de um contrato de aluguel REAL, contra o locatário REAL daquele
+      // contrato, pode emitir (grounded — evita acusação fabricada).
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.ownerId
+        && contractData(request.resource.data.contractId).ownerId == request.auth.uid
+        && contractData(request.resource.data.contractId).counterpartyId == request.resource.data.renterId;
+      // Só o emissor atualiza (resolver quando devolvido).
+      allow update: if isSignedIn() && request.auth.uid == resource.data.ownerId;
       allow delete: if false;
     }
   }

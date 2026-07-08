@@ -105,7 +105,8 @@ export type NotificationType =
   | 'STOLEN_FOUND'
   | 'CONNECTION_REQUEST'
   | 'CONNECTION_ACCEPTED'
-  | 'ITEM_TRANSFER';
+  | 'ITEM_TRANSFER'
+  | 'RENTAL_OVERDUE';
 
 export interface Notification {
   id: string;
@@ -165,8 +166,29 @@ export interface Contract {
   paymentProofUrl?: string;   // comprovante (imagem/PDF) no Storage
   paymentSubmittedBy?: string;
   paymentAt?: string;
+  // Fluxo de não-devolução (aluguel atrasado): aviso -> prazo -> alerta público.
+  overdueNoticeAt?: string;   // quando o dono notificou o atraso (inicia o prazo)
+  publicAlert?: boolean;      // dono escalou para alerta público
+  publicAlertAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Alerta público de não-devolução (visível à comunidade e no perfil do locatário).
+export interface ReturnAlert {
+  id: string;          // = contractId (determinístico)
+  contractId: string;
+  renterId: string;    // quem não devolveu
+  renterName: string;
+  renterAvatar: string;
+  ownerId: string;     // quem emitiu
+  ownerName: string;
+  equipmentName: string;
+  equipmentImage?: string;
+  agreedReturnDate: string;
+  raisedAt: string;
+  status: 'active' | 'resolved';
+  resolvedAt?: string;
 }
 
 export interface Ad {

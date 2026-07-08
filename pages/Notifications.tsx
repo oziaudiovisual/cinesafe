@@ -208,6 +208,7 @@ export const Notifications: React.FC = () => {
                                         {notif.type === 'STOLEN_FOUND' && <span className="text-red-400">Alerta de Segurança</span>}
                                         {notif.type === 'CONNECTION_REQUEST' && 'Convite de Conexão'}
                                         {notif.type === 'CONNECTION_ACCEPTED' && <span className="text-green-400">Conexão Aceita</span>}
+                                        {notif.type === 'RENTAL_OVERDUE' && <span className="text-red-400">Aluguel Atrasado</span>}
                                         {notif.type === 'ITEM_TRANSFER' && 'Transferência de Equipamento'}
                                     </div>
                                     <p className="text-brand-300 text-sm leading-relaxed mb-4">{notif.message}</p>

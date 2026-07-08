@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { userService } from '../services/userService';
 import { notificationService } from '../services/notificationService';
 import { chatService } from '../services/chatService';
+import { contractService } from '../services/contractService';
 import { useAuth } from '../context/AuthContext';
 import { User, Notification } from '../types';
 import { Icons } from '../components/Icons';
@@ -19,8 +20,13 @@ export const Network: React.FC = () => {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalConfig, setModalConfig] = useState<{ title: string; message: string; action: () => Promise<void>; confirmLabel: string; isDestructive?: boolean; }>({ title: '', message: '', action: async () => {}, confirmLabel: '' });
     const [modalProcessing, setModalProcessing] = useState(false);
+    const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
 
     useEffect(() => { if (user) loadConnections(); }, [user]);
+    useEffect(() => {
+        const unsub = contractService.subscribeCommunityAlerts(alerts => setFlaggedIds(new Set(alerts.map(a => a.renterId))));
+        return () => unsub();
+    }, []);
     useEffect(() => { const timer = setTimeout(() => { if (searchQuery.trim().length >= 2 && user) handleSearch(); else setSearchResults([]); }, 500); return () => clearTimeout(timer); }, [searchQuery]);
 
     const loadConnections = async () => {
@@ -105,6 +111,7 @@ export const Network: React.FC = () => {
                                         </div>
                                         <div>
                                             <h4 className="text-white font-bold text-sm">{resultUser.name}</h4>
+                                            {flaggedIds.has(resultUser.id) && <span className="flex items-center gap-1 text-[9px] font-bold uppercase text-red-400 my-0.5"><Icons.AlertTriangle className="w-2.5 h-2.5" /> Pendência de devolução</span>}
                                             <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-brand-400">
                                                 <span className="flex items-center gap-1 text-accent-gold"><Icons.Trophy className="w-3 h-3" /> {resultUser.reputationPoints} XP</span>
                                                 <span className="w-1 h-1 bg-brand-700 rounded-full"></span>
