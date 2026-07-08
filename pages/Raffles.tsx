@@ -142,11 +142,11 @@ export const Raffles: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/10 to-transparent pointer-events-none z-0"></div>
             )}
 
-            <div className="relative z-10 p-5 md:p-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* Coluna esquerda (50%): Imagem + Info + Countdown — preenchendo tudo */}
-                <div className="flex gap-5 items-stretch h-full">
-                  {/* Imagem do prêmio — ocupa toda a altura */}
+            <div className="relative z-10 p-6 md:p-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Coluna esquerda (50%): Imagem + Info + Countdown */}
+                <div className="flex gap-5 items-stretch">
+                  {/* Imagem do prêmio */}
                   <div className="w-36 md:w-44 rounded-2xl bg-black/30 border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
                     {selectedRaffle.prizeImageUrl ? (
                       <img
@@ -159,8 +159,8 @@ export const Raffles: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Info + Countdown */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                  {/* Info + Countdown — alinhados à esquerda */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
@@ -174,17 +174,19 @@ export const Raffles: React.FC = () => {
                       <h2 className="text-2xl md:text-3xl font-extrabold text-white leading-tight mb-1">
                         {selectedRaffle.title}
                       </h2>
-                      <p className="text-brand-300 text-sm mb-4 line-clamp-2">
+                      <p className="text-brand-300 text-sm line-clamp-2">
                         {selectedRaffle.description}
                       </p>
                     </div>
 
                     {!isCompleted && (
-                      <RaffleCountdown endDate={selectedRaffle.endDate} />
+                      <div className="mt-4">
+                        <RaffleCountdown endDate={selectedRaffle.endDate} />
+                      </div>
                     )}
 
                     {isCompleted && selectedRaffle.winnerName && (
-                      <div className={`inline-flex items-center gap-3 rounded-xl px-4 py-2.5 ${
+                      <div className={`mt-4 inline-flex items-center gap-3 rounded-xl px-4 py-2.5 ${
                         isWinner
                           ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30'
                           : 'bg-white/5 border border-white/10'
@@ -207,8 +209,8 @@ export const Raffles: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Coluna direita (50%): Stats 2×2 preenchendo todo o espaço */}
-                <div className="grid grid-cols-2 gap-3 h-full">
+                {/* Coluna direita (50%): Stats 2×2 */}
+                <div className="grid grid-cols-2 gap-4 h-full">
                   {[
                     { label: 'Participantes', value: realTotalParticipants, icon: Icons.Users },
                     { label: 'Tickets Totais', value: realTotalTickets, icon: Icons.Ticket },
