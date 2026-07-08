@@ -10,9 +10,9 @@ const CineSafeLogoComponent: React.FC<CineSafeLogoProps> = ({ size = 40, classNa
   const style = !className.includes('w-') ? { width: size, height: 'auto' } : { height: 'auto' };
 
   return (
-    <img 
-      src="https://ozi.com.br/cinesafe/logo.webp" 
-      alt="Cine Safe Logo" 
+    <img
+      src="/logo.webp"
+      alt="Cine Safe Logo"
       className={className} 
       style={style} 
     />
