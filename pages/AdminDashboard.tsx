@@ -244,7 +244,7 @@ export const AdminDashboard: React.FC = () => {
                             <form onSubmit={handleSaveAd} className="space-y-6">
                                 <div className="flex flex-col md:flex-row gap-8">
                                     <div className="w-full md:w-1/3">
-                                        <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Imagem do Produto (PNG Transparente)</label>
+                                        <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Imagem do Produto (WebP com fundo)</label>
                                         <div className="aspect-[4/3] bg-black/30 rounded-2xl border-2 border-dashed border-brand-700 flex flex-col items-center justify-center cursor-pointer hover:border-accent-secondary/50 transition-colors relative overflow-hidden group" onClick={() => fileInputRef.current?.click()}>
                                             {adImagePreview ? (
                                                 <img src={adImagePreview} alt="Preview" className="w-full h-full object-contain p-4" />
@@ -254,7 +254,7 @@ export const AdminDashboard: React.FC = () => {
                                                     <span className="text-sm text-brand-500">Clique para upload (600px de altura)</span>
                                                 </div>
                                             )}
-                                            <input type="file" ref={fileInputRef} className="hidden" accept="image/png" onChange={handleAdFileChange} />
+                                            <input type="file" ref={fileInputRef} className="hidden" accept="image/webp,image/png,image/jpeg" onChange={handleAdFileChange} />
                                         </div>
                                     </div>
                                     
