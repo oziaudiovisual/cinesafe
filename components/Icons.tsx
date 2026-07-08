@@ -5,7 +5,7 @@ import {
   Pencil, Trash2, HelpCircle, Upload, Image, Users, Lock, Megaphone, BarChart,
   Calendar, ExternalLink, MousePointer, Siren, Map, Mail, ArrowRight, Wallet, LogOut,
   Tag, Banknote, Clock, Globe, User, FileText,
-  DollarSign, UserPlus, Download, Link, Gift, Ticket
+  DollarSign, UserPlus, Download, Link, Gift, Ticket, Bell
 } from 'lucide-react';
 
 export const Icons = {
@@ -14,5 +14,5 @@ export const Icons = {
   Pencil, Trash2, HelpCircle, Upload, Image, Users, Lock, Megaphone, BarChart,
   Calendar, ExternalLink, MousePointer, Siren, Map, Mail, ArrowRight, Wallet, LogOut,
   Tag, Banknote, Clock, Globe, User, FileText,
-  DollarSign, UserPlus, Download, Link, Gift, Ticket
+  DollarSign, UserPlus, Download, Link, Gift, Ticket, Bell
 };
