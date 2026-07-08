@@ -1,6 +1,6 @@
 import { db, storage } from './firebase';
 import {
-  collection, doc, setDoc, updateDoc,
+  collection, doc, setDoc, updateDoc, getDocs, increment,
   query, where, onSnapshot
 } from 'firebase/firestore';
 import { Contract, EquipmentStatus, Equipment, User, ReturnAlert, Notification } from '../types';
@@ -87,11 +87,26 @@ export const contractService = {
       } else {
         await updateDoc(doc(db, 'contracts', contract.id), { status: 'active', updatedAt: new Date().toISOString() });
       }
+      // Contador de impacto global (agregado, sem expor dados individuais).
+      await setDoc(doc(db, 'stats', 'global'), {
+        transactions: increment(1),
+        rentals: increment(contract.type === 'rental' ? 1 : 0),
+        sales: increment(contract.type === 'sale' ? 1 : 0),
+        transactedValue: increment(Number(contract.value) || 0),
+      }, { merge: true }).catch(() => {});
       return true;
     } catch (e) {
       console.error('acceptContract error:', e);
       return false;
     }
+  },
+
+  // Admin: todas as transações (contratos) para o histórico, ordenadas por data.
+  getAllContracts: async (): Promise<Contract[]> => {
+    const snap = await getDocs(collection(db, 'contracts'));
+    return snap.docs
+      .map(d => d.data() as Contract)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
   // Recusa (counterparty) ou cancelamento (dono) de uma proposta. Na venda, devolve

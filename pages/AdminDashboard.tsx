@@ -1,21 +1,35 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { userService } from '../services/userService';
 import { adService } from '../services/adService';
-import { User, Ad } from '../types';
+import { contractService } from '../services/contractService';
+import { User, Ad, Contract, Equipment } from '../types';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { createPortal } from 'react-dom';
 
 const generateUUID = () => crypto.randomUUID();
+const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const TX_STATUS: Record<string, { label: string; cls: string }> = {
+  proposed: { label: 'Proposta', cls: 'bg-amber-500/20 text-amber-300' },
+  active: { label: 'Ativo', cls: 'bg-accent-primary/20 text-accent-primary' },
+  completed: { label: 'Concluído', cls: 'bg-green-500/20 text-green-300' },
+  declined: { label: 'Recusado', cls: 'bg-red-500/20 text-red-300' },
+  cancelled: { label: 'Cancelado', cls: 'bg-brand-700 text-brand-300' },
+};
 
 export const AdminDashboard: React.FC = () => {
     const { user: currentUser } = useAuth();
-    const [activeTab, setActiveTab] = useState<'users' | 'ads'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'ads' | 'transactions' | 'incidents'>('users');
     const [loading, setLoading] = useState(true);
-    const [globalStats, setGlobalStats] = useState({ users: 0, equipment: 0, stolen: 0, value: 0 });
+    const [globalStats, setGlobalStats] = useState({ users: 0, equipment: 0, stolen: 0, value: 0, transactions: 0 });
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [stolen, setStolen] = useState<Equipment[]>([]);
+    const [recovered, setRecovered] = useState<any[]>([]);
+    const [txFrom, setTxFrom] = useState('');
+    const [txTo, setTxTo] = useState('');
     const [users, setUsers] = useState<User[]>([]);
     const [ads, setAds] = useState<Ad[]>([]);
     const [userFilter, setUserFilter] = useState('');
@@ -39,16 +53,22 @@ export const AdminDashboard: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [allUsers, allAds, stats] = await Promise.all([
+            const [allUsers, allAds, detailed, allContracts, stolenSnap, recoveredSnap] = await Promise.all([
                 userService.getAllUsers(),
                 adService.getAllAds(),
-                userService.getGlobalDetailedStats().then(s => ({ users: 0, equipment: s.totalItems, stolen: s.stolenItems, value: s.totalValue })),
+                userService.getGlobalDetailedStats(),
+                contractService.getAllContracts(),
+                getDocs(query(collection(db, 'equipment'), where('status', '==', 'STOLEN'))),
+                getDocs(collection(db, 'theft_history')),
             ]);
-            const usersCount = (await getDocs(collection(db, 'users'))).size; 
+            const usersCount = (await getDocs(collection(db, 'users'))).size;
             setUsers(allUsers);
             setAds(allAds);
-            setGlobalStats({...stats, users: usersCount});
-        } catch (error) { console.error("Falha ao carregar dados do painel:", error); } 
+            setGlobalStats({ users: usersCount, equipment: detailed.totalItems, stolen: detailed.stolenItems, value: detailed.totalValue, transactions: detailed.transactionsCount || 0 });
+            setContracts(allContracts);
+            setStolen(stolenSnap.docs.map(d => d.data() as Equipment));
+            setRecovered(recoveredSnap.docs.map(d => d.data()).sort((a: any, b: any) => new Date(b.recoveryDate || 0).getTime() - new Date(a.recoveryDate || 0).getTime()));
+        } catch (error) { console.error("Falha ao carregar dados do painel:", error); }
         finally { setLoading(false); }
     };
 
@@ -85,6 +105,8 @@ export const AdminDashboard: React.FC = () => {
     const handleDeleteAd = (ad: Ad) => { setModalConfig({ title: "Excluir Anúncio", message: "Tem certeza que deseja excluir esta campanha?", isDestructive: true, confirmLabel: "Excluir Anúncio", action: async () => { await adService.deleteAd(ad.id); await loadData(); setModalOpen(false); } }); setModalOpen(true); };
 
     const sortedUsers = [...users].filter(u => u.name.toLowerCase().includes(userFilter.toLowerCase()) || u.email.toLowerCase().includes(userFilter.toLowerCase())).sort((a, b) => (b.reputationPoints || 0) - (a.reputationPoints || 0));
+    const filteredTx = contracts.filter(c => (!txFrom || c.createdAt.slice(0, 10) >= txFrom) && (!txTo || c.createdAt.slice(0, 10) <= txTo));
+    const filteredTxTotal = filteredTx.reduce((s, c) => s + (Number(c.value) || 0), 0);
 
     return (
         <div className="space-y-8 pb-12">
@@ -95,21 +117,30 @@ export const AdminDashboard: React.FC = () => {
                 </h1>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <StatCard label="Usuários Totais" value={globalStats.users.toString()} icon={Icons.Users} color="text-blue-400" />
                 <StatCard label="Equipamentos" value={globalStats.equipment.toString()} icon={Icons.Camera} color="text-accent-primary" />
+                <StatCard label="Transações" value={globalStats.transactions.toString()} icon={Icons.ShoppingBag} color="text-accent-secondary" />
                 <StatCard label="Itens Roubados" value={globalStats.stolen.toString()} icon={Icons.ShieldAlert} color="text-red-500" />
                 <StatCard label="Valor Protegido" value={globalStats.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' })} icon={Icons.Banknote} color="text-green-400" />
             </div>
 
-            <div className="flex gap-4 border-b border-white/10">
-                <button onClick={() => setActiveTab('users')} className={`px-6 py-3 font-bold text-sm transition-colors relative ${activeTab === 'users' ? 'text-white' : 'text-brand-400 hover:text-white'}`}>
-                    Gerenciar Usuários
+            <div className="flex gap-4 border-b border-white/10 overflow-x-auto no-scrollbar">
+                <button onClick={() => setActiveTab('users')} className={`px-6 py-3 font-bold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'users' ? 'text-white' : 'text-brand-400 hover:text-white'}`}>
+                    Usuários
                     {activeTab === 'users' && <div className="absolute bottom-0 left-0 w-full h-1 bg-accent-primary rounded-t-full"></div>}
                 </button>
-                <button onClick={() => setActiveTab('ads')} className={`px-6 py-3 font-bold text-sm transition-colors relative ${activeTab === 'ads' ? 'text-white' : 'text-brand-400 hover:text-white'}`}>
-                    Gerenciar Anúncios
-                    {activeTab === 'ads' && <div className="absolute bottom-0 left-0 w-full h-1 bg-accent-secondary rounded-t-full"></div>}
+                <button onClick={() => setActiveTab('transactions')} className={`px-6 py-3 font-bold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'transactions' ? 'text-white' : 'text-brand-400 hover:text-white'}`}>
+                    Transações
+                    {activeTab === 'transactions' && <div className="absolute bottom-0 left-0 w-full h-1 bg-accent-secondary rounded-t-full"></div>}
+                </button>
+                <button onClick={() => setActiveTab('incidents')} className={`px-6 py-3 font-bold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'incidents' ? 'text-white' : 'text-brand-400 hover:text-white'}`}>
+                    Roubos & Recuperações
+                    {activeTab === 'incidents' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-500 rounded-t-full"></div>}
+                </button>
+                <button onClick={() => setActiveTab('ads')} className={`px-6 py-3 font-bold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'ads' ? 'text-white' : 'text-brand-400 hover:text-white'}`}>
+                    Anúncios
+                    {activeTab === 'ads' && <div className="absolute bottom-0 left-0 w-full h-1 bg-accent-gold rounded-t-full"></div>}
                 </button>
             </div>
 
@@ -249,6 +280,92 @@ export const AdminDashboard: React.FC = () => {
                                 </p>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'transactions' && (
+                <div className="space-y-4">
+                    <div className="flex flex-wrap gap-3 items-end">
+                        <div>
+                            <label className="text-xs font-bold text-brand-400 uppercase ml-1">De</label>
+                            <input type="date" className="w-full glass-input rounded-xl p-3 mt-1" value={txFrom} onChange={e => setTxFrom(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-brand-400 uppercase ml-1">Até</label>
+                            <input type="date" className="w-full glass-input rounded-xl p-3 mt-1" value={txTo} onChange={e => setTxTo(e.target.value)} />
+                        </div>
+                        {(txFrom || txTo) && <button onClick={() => { setTxFrom(''); setTxTo(''); }} className="px-4 py-3 text-xs font-bold text-brand-400 hover:text-white">Limpar</button>}
+                        <div className="ml-auto text-right">
+                            <p className="text-sm text-white font-bold">{filteredTx.length} transações</p>
+                            <p className="text-xs text-brand-400">{brl(filteredTxTotal)} movimentados</p>
+                        </div>
+                    </div>
+
+                    <div className="glass-card rounded-2xl border border-white/5 divide-y divide-white/5 overflow-hidden">
+                        {filteredTx.length === 0 ? (
+                            <p className="text-brand-500 text-center py-12 text-sm">Nenhuma transação no período.</p>
+                        ) : filteredTx.map(c => {
+                            const st = TX_STATUS[c.status] || { label: c.status, cls: 'bg-brand-700 text-brand-300' };
+                            return (
+                                <div key={c.id} className="p-4 flex items-center gap-3 flex-wrap hover:bg-white/5 transition-colors">
+                                    <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md shrink-0 ${c.type === 'sale' ? 'bg-green-500/20 text-green-300' : 'bg-accent-primary/20 text-accent-primary'}`}>{c.type === 'sale' ? 'Venda' : 'Aluguel'}</span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-white font-bold text-sm truncate">{c.equipmentName}</p>
+                                        <p className="text-xs text-brand-400 truncate">{c.ownerName} → {c.counterpartyName}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-white font-bold text-sm">{brl(c.value)}</p>
+                                        <p className="text-[10px] text-brand-500">{new Date(c.createdAt).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                    <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md shrink-0 ${st.cls}`}>{st.label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'incidents' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="glass-card rounded-2xl border border-red-500/20 p-5">
+                        <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Icons.ShieldAlert className="w-5 h-5 text-red-400" /> Itens Roubados ({stolen.length})</h3>
+                        <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                            {stolen.length === 0 ? <p className="text-brand-500 text-sm py-4 text-center">Nenhum item roubado ativo.</p> :
+                                stolen.map(it => (
+                                    <div key={it.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5">
+                                        <div className="w-10 h-10 rounded-lg bg-black/40 overflow-hidden shrink-0">{it.imageUrl && <img src={it.imageUrl} alt={it.name} className="w-full h-full object-cover" />}</div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-white font-bold text-sm truncate">{it.name}</p>
+                                            <p className="text-xs text-brand-400 truncate">{it.theftAddress || 'Local não informado'}</p>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-red-400 font-bold text-xs">{brl(it.value || 0)}</p>
+                                            <p className="text-[10px] text-brand-500">{it.theftDate ? new Date(it.theftDate).toLocaleDateString('pt-BR') : ''}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+
+                    <div className="glass-card rounded-2xl border border-green-500/20 p-5">
+                        <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Icons.ShieldCheck className="w-5 h-5 text-green-400" /> Itens Recuperados ({recovered.length})</h3>
+                        <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                            {recovered.length === 0 ? <p className="text-brand-500 text-sm py-4 text-center">Nenhum item recuperado ainda.</p> :
+                                recovered.map((r, i) => (
+                                    <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5">
+                                        <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0"><Icons.ShieldCheck className="w-5 h-5 text-green-400" /></div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-white font-bold text-sm">Recuperado {r.recoveredViaApp ? 'pelo app' : '(outros meios)'}</p>
+                                            <p className="text-xs text-brand-400 truncate">{r.theftAddress || 'Local não informado'}</p>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-green-400 font-bold text-xs">{brl(r.equipmentValue || 0)}</p>
+                                            <p className="text-[10px] text-brand-500">{r.recoveryDate ? new Date(r.recoveryDate).toLocaleDateString('pt-BR') : ''}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                        </div>
                     </div>
                 </div>
             )}

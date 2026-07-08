@@ -142,10 +142,13 @@ export const Home: React.FC = () => {
         </div>
         <div>
             <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Icons.Globe className="w-6 h-6 text-blue-400" />Impacto global do Cine Safe</h2>
-            <div className="bg-brand-800/50 rounded-[2.5rem] border border-white/5 p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 relative overflow-hidden">
+            <div className="bg-brand-800/50 rounded-[2.5rem] border border-white/5 p-6 md:p-8 grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none"></div>
                 <GlobalStatItem icon={Icons.Camera} label="Equipamentos Protegidos" value={systemStats.totalItems.toLocaleString('pt-BR')} />
-                <GlobalStatItem icon={Icons.Banknote} label="Em Valor Segurado" value={systemStats.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' })} />
+                <GlobalStatItem icon={Icons.ShoppingBag} label="Transações Protegidas" value={(systemStats.transactionsCount || 0).toLocaleString('pt-BR')} />
+                <GlobalStatItem icon={Icons.Banknote} label="Valor Movimentado" value={(systemStats.transactedValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' })} />
+                <GlobalStatItem icon={Icons.Wallet} label="Em Valor Segurado" value={systemStats.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' })} />
+                <GlobalStatItem icon={Icons.ShieldCheck} label="Itens Recuperados" value={systemStats.recoveredItems.toLocaleString('pt-BR')} />
                 <GlobalStatItem icon={Icons.Siren} label="Ocorrências Registradas" value={systemStats.stolenItems.toLocaleString('pt-BR')} />
             </div>
         </div>

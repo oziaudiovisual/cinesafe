@@ -251,7 +251,7 @@ export const userService = {
     const eqCol = collection(db, 'equipment');
     const histCol = collection(db, 'theft_history');
 
-    const [totalAgg, safeAgg, stolenAgg, rentAgg, saleAgg, valueAgg, histAgg] = await Promise.all([
+    const [totalAgg, safeAgg, stolenAgg, rentAgg, saleAgg, valueAgg, histAgg, statsSnap] = await Promise.all([
       getCountFromServer(eqCol),
       getCountFromServer(query(eqCol, where('status', '==', 'SAFE'))),
       getCountFromServer(query(eqCol, where('status', '==', 'STOLEN'))),
@@ -259,7 +259,10 @@ export const userService = {
       getCountFromServer(query(eqCol, where('isForSale', '==', true))),
       getAggregateFromServer(eqCol, { total: sum('value') }),
       getAggregateFromServer(histCol, { c: count(), total: sum('equipmentValue') }),
+      getDoc(doc(db, 'stats', 'global')),
     ]);
+
+    const global = statsSnap.exists() ? statsSnap.data() : {};
 
     return {
       totalItems: totalAgg.data().count,
@@ -273,6 +276,8 @@ export const userService = {
       saleOffers: 0,
       itemsForRentCount: rentAgg.data().count,
       itemsForSaleCount: saleAgg.data().count,
+      transactionsCount: Number(global.transactions) || 0,
+      transactedValue: Number(global.transactedValue) || 0,
     };
   },
 

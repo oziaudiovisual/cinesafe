@@ -231,4 +231,6 @@ export interface DetailedStats {
   saleOffers: number;
   itemsForRentCount: number;
   itemsForSaleCount: number;
+  transactionsCount?: number;   // impacto global: transações fechadas
+  transactedValue?: number;     // impacto global: valor total movimentado
 }
