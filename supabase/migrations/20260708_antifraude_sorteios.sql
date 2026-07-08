@@ -110,6 +110,32 @@ create unique index if not exists uq_ticket_referral
   where source = 'referral';
 
 -- ----------------------------------------------------------------------------
+-- 3b. notifications: garantir que o tipo novo RAFFLE_CPF_REMINDER é aceito.
+--     Existe (como em raffle_tickets.source) um CHECK antigo em notifications.type
+--     que não conhece o tipo novo — o lembrete falharia. Removemos qualquer CHECK
+--     de `type` e recriamos com a lista completa (NOT VALID: não revalida linhas
+--     antigas, só novas inserções).
+-- ----------------------------------------------------------------------------
+do $$
+declare c record;
+begin
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'public.notifications'::regclass and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%type%'
+  loop
+    execute format('alter table public.notifications drop constraint %I', c.conname);
+  end loop;
+  alter table public.notifications add constraint notifications_type_check check (
+    type in (
+      'RENTAL_INTEREST','SALE_INTEREST','STOLEN_FOUND','CONNECTION_REQUEST',
+      'CONNECTION_ACCEPTED','ITEM_TRANSFER','RENTAL_OVERDUE',
+      'RAFFLE_TICKET','RAFFLE_WINNER','RAFFLE_CPF_REMINDER'
+    )
+  ) not valid;
+end $$;
+
+-- ----------------------------------------------------------------------------
 -- 4. Trava de escrita: cliente não insere mais ticket "na mão" (fecha o buraco
 --    do console). Só as funções SECURITY DEFINER escrevem.
 --    Admin continua podendo update/delete (sortear, excluir).
@@ -269,7 +295,9 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_title text; v_img text; v_by uuid; v_n int;
 begin
-  if not public.is_admin() then
+  -- Bloqueia usuário autenticado não-admin. Permite execução via SQL Editor /
+  -- service role (auth.uid() nulo), que é como o admin roda a migração manual.
+  if auth.uid() is not null and not public.is_admin() then
     return json_build_object('ok', false, 'code', 'FORBIDDEN', 'message', 'Apenas admin.');
   end if;
 
