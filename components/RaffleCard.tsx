@@ -67,7 +67,7 @@ export const RaffleCard: React.FC<RaffleCardProps> = ({ raffle, userTicketCount 
             </div>
 
             {/* Seta */}
-            <Icons.ChevronRight className="w-5 h-5 text-brand-500 group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
+            <Icons.ArrowRight className="w-5 h-5 text-brand-500 group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
           </div>
         </div>
       </div>
