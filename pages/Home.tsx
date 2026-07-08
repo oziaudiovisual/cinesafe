@@ -134,7 +134,9 @@ export const Home: React.FC = () => {
             {hasNoInventory && <ActionCard icon={Icons.Plus} color="primary" title="Proteja seus Itens" text="Seu inventário está vazio. Cadastre equipamentos para proteção." link="/inventory" linkText="Cadastrar Primeiro Item" />}
             {hasInventoryButNoRentals && <ActionCard icon={Icons.Banknote} color="green" title="Faça Renda Extra" text="Você tem itens parados. Coloque-os para alugar e lucre." link="/inventory" linkText="Ativar Aluguéis" />}
         </div>
-        {!isPremium && (
+        {/* Card Premium — só aparece quando NÃO tem sorteio ativo (o sorteio já tem seu CTA de convite).
+             Referrals vindos de sorteios contam para o Premium (mesmo referralCount). */}
+        {!isPremium && !activeRaffle && (
             <div className="bg-gradient-to-r from-brand-800 to-brand-900 rounded-[2rem] p-6 border border-brand-700 relative overflow-hidden group hover:border-accent-primary/50 transition-colors">
                  <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
                      <div className="flex items-center gap-4">
