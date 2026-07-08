@@ -93,6 +93,11 @@ export const Raffles: React.FC = () => {
   const isCompleted = selectedRaffle?.status === 'completed';
   const isWinner = isCompleted && selectedRaffle?.winnerId === user.id;
 
+  // Calcula stats reais a partir do leaderboard (fonte de verdade)
+  const realTotalParticipants = leaderboard.length;
+  const realTotalTickets = leaderboard.reduce((sum, entry) => sum + entry.ticketCount, 0);
+  const realChances = realTotalTickets > 0 ? ((userTickets.length / realTotalTickets) * 100).toFixed(1) : '0';
+
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       {/* Título da página */}
@@ -203,10 +208,10 @@ export const Raffles: React.FC = () => {
               {/* Stats resumidos */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
                 {[
-                  { label: 'Participantes', value: selectedRaffle.totalParticipants, icon: Icons.Users },
-                  { label: 'Tickets Totais', value: selectedRaffle.totalTickets, icon: Icons.Ticket },
+                  { label: 'Participantes', value: realTotalParticipants, icon: Icons.Users },
+                  { label: 'Tickets Totais', value: realTotalTickets, icon: Icons.Ticket },
                   { label: 'Seus Tickets', value: userTickets.length, icon: Icons.Gift, highlight: true },
-                  { label: 'Suas Chances', value: selectedRaffle.totalTickets > 0 ? `${((userTickets.length / selectedRaffle.totalTickets) * 100).toFixed(1)}%` : '0%', icon: Icons.BarChart },
+                  { label: 'Suas Chances', value: `${realChances}%`, icon: Icons.BarChart },
                 ].map((stat, i) => (
                   <div
                     key={i}
