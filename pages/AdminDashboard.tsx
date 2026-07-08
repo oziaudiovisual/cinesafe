@@ -425,9 +425,12 @@ export const AdminDashboard: React.FC = () => {
                             try {
                                 let imageUrl: string | null | undefined = undefined;
                                 if (raffleImageFile) {
-                                    imageUrl = await raffleService.uploadPrizeImage(raffleImageFile);
+                                    try {
+                                        imageUrl = await raffleService.uploadPrizeImage(raffleImageFile);
+                                    } catch (uploadErr) {
+                                        console.warn('Upload da imagem falhou (cota excedida?), criando sorteio sem imagem:', uploadErr);
+                                    }
                                 } else if (editingRaffleId && raffleImagePreview && !raffleImagePreview.startsWith('data:')) {
-                                    // Mantém a URL existente (Storage) quando editando sem trocar imagem
                                     imageUrl = raffleImagePreview;
                                 }
                                 // Validar sorteio único ativo
