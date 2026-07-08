@@ -142,46 +142,47 @@ export const Raffles: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/10 to-transparent pointer-events-none z-0"></div>
             )}
 
-            <div className="relative z-10 p-6 md:p-8">
-              <div className="flex flex-col md:flex-row gap-6 items-center">
-                {/* Imagem do prêmio */}
-                <div className="w-40 h-40 md:w-48 md:h-48 rounded-2xl bg-black/30 border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
-                  {selectedRaffle.prizeImageUrl ? (
-                    <img
-                      src={selectedRaffle.prizeImageUrl}
-                      alt={selectedRaffle.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Icons.Gift className="w-20 h-20 text-accent-primary/40" />
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 text-center md:text-left">
-                  <div className="flex items-center gap-2 justify-center md:justify-start mb-3">
-                    <span className={`text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
-                      isCompleted
-                        ? 'bg-green-500/20 text-green-400 border border-green-500/20'
-                        : 'bg-accent-primary/20 text-accent-primary border border-accent-primary/20'
-                    }`}>
-                      {isCompleted ? '✨ Sorteio Realizado' : '🎯 Sorteio Ativo'}
-                    </span>
+            <div className="relative z-10 p-5 md:p-6">
+              <div className="flex flex-col lg:flex-row gap-5">
+                {/* Lado esquerdo: Imagem + Info + Countdown */}
+                <div className="flex gap-4 items-start flex-1 min-w-0">
+                  {/* Imagem do prêmio */}
+                  <div className="w-28 h-28 md:w-32 md:h-32 rounded-2xl bg-black/30 border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                    {selectedRaffle.prizeImageUrl ? (
+                      <img
+                        src={selectedRaffle.prizeImageUrl}
+                        alt={selectedRaffle.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Icons.Gift className="w-14 h-14 text-accent-primary/40" />
+                    )}
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-2">
-                    {selectedRaffle.title}
-                  </h2>
-                  <p className="text-brand-300 text-sm mb-4 max-w-lg">
-                    {selectedRaffle.description}
-                  </p>
 
-                  {!isCompleted && (
-                    <RaffleCountdown endDate={selectedRaffle.endDate} />
-                  )}
+                  {/* Info + Countdown empilhados */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                        isCompleted
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/20'
+                          : 'bg-accent-primary/20 text-accent-primary border border-accent-primary/20'
+                      }`}>
+                        {isCompleted ? '✨ Realizado' : '🎯 Ativo'}
+                      </span>
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-extrabold text-white leading-tight truncate">
+                      {selectedRaffle.title}
+                    </h2>
+                    <p className="text-brand-400 text-xs mb-3 truncate">
+                      {selectedRaffle.description}
+                    </p>
 
-                  {isCompleted && selectedRaffle.winnerName && (
-                    <div className="mt-2">
-                      <div className={`inline-flex items-center gap-3 rounded-2xl px-5 py-3 ${
+                    {!isCompleted && (
+                      <RaffleCountdown endDate={selectedRaffle.endDate} compact />
+                    )}
+
+                    {isCompleted && selectedRaffle.winnerName && (
+                      <div className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 ${
                         isWinner
                           ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30'
                           : 'bg-white/5 border border-white/10'
@@ -189,45 +190,45 @@ export const Raffles: React.FC = () => {
                         <img
                           src={selectedRaffle.winnerAvatar || ''}
                           alt={selectedRaffle.winnerName}
-                          className="w-10 h-10 rounded-full object-cover border-2 border-yellow-500"
+                          className="w-8 h-8 rounded-full object-cover border-2 border-yellow-500"
                         />
                         <div>
-                          <span className="text-yellow-400 text-xs font-bold uppercase tracking-wider block">
+                          <span className="text-yellow-400 text-[10px] font-bold uppercase tracking-wider block">
                             🏆 Vencedor
                           </span>
-                          <span className="text-white font-bold">
+                          <span className="text-white font-bold text-sm">
                             {isWinner ? 'Você! 🎉' : selectedRaffle.winnerName}
                           </span>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats resumidos */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-                {[
-                  { label: 'Participantes', value: realTotalParticipants, icon: Icons.Users },
-                  { label: 'Tickets Totais', value: realTotalTickets, icon: Icons.Ticket },
-                  { label: 'Seus Tickets', value: userTickets.length, icon: Icons.Gift, highlight: true },
-                  { label: 'Suas Chances', value: `${realChances}%`, icon: Icons.BarChart },
-                ].map((stat, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-xl p-3 text-center ${
-                      stat.highlight
-                        ? 'bg-accent-primary/10 border border-accent-primary/20'
-                        : 'bg-black/20 border border-white/5'
-                    }`}
-                  >
-                    <stat.icon className={`w-4 h-4 mx-auto mb-1 ${stat.highlight ? 'text-accent-primary' : 'text-brand-400'}`} />
-                    <span className={`text-xl font-extrabold block ${stat.highlight ? 'text-accent-primary' : 'text-white'}`}>
-                      {stat.value}
-                    </span>
-                    <span className="text-brand-500 text-[10px] uppercase tracking-wider">{stat.label}</span>
+                    )}
                   </div>
-                ))}
+                </div>
+
+                {/* Lado direito: Stats 2×2 */}
+                <div className="grid grid-cols-2 gap-2 flex-shrink-0 lg:w-56">
+                  {[
+                    { label: 'Participantes', value: realTotalParticipants, icon: Icons.Users },
+                    { label: 'Tickets Totais', value: realTotalTickets, icon: Icons.Ticket },
+                    { label: 'Seus Tickets', value: userTickets.length, icon: Icons.Gift, highlight: true },
+                    { label: 'Suas Chances', value: `${realChances}%`, icon: Icons.BarChart },
+                  ].map((stat, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-xl p-2.5 text-center ${
+                        stat.highlight
+                          ? 'bg-accent-primary/10 border border-accent-primary/20'
+                          : 'bg-black/20 border border-white/5'
+                      }`}
+                    >
+                      <stat.icon className={`w-3.5 h-3.5 mx-auto mb-0.5 ${stat.highlight ? 'text-accent-primary' : 'text-brand-400'}`} />
+                      <span className={`text-lg font-extrabold block leading-tight ${stat.highlight ? 'text-accent-primary' : 'text-white'}`}>
+                        {stat.value}
+                      </span>
+                      <span className="text-brand-500 text-[9px] uppercase tracking-wider leading-tight">{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
