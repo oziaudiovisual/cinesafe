@@ -107,7 +107,7 @@ export const useInventory = () => {
     };
 
     const handleCorsError = () => {
-        setModalConfig({ title: "Falha de Upload: Ação Necessária", message: "O envio do arquivo foi bloqueado por uma política de segurança (CORS). O domínio 'https://cinesafe.netlify.app' precisa ser adicionado à lista de permissões de CORS do bucket do Firebase.", isDestructive: true, confirmLabel: "Entendi", action: async () => setModalOpen(false) });
+        setModalConfig({ title: "Falha de Upload: Ação Necessária", message: "O envio do arquivo foi bloqueado por uma política de segurança (CORS). O domínio do site precisa estar na lista de permissões de CORS do bucket do Firebase Storage.", isDestructive: true, confirmLabel: "Entendi", action: async () => setModalOpen(false) });
         setModalOpen(true);
     };
     // FIX: Add React namespace for FormEvent type

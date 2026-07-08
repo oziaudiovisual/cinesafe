@@ -55,6 +55,7 @@ export const Rankings: React.FC = () => {
           value: Math.floor(totalValue / 1000),
           checks: (currentUser.checksCount || 0) * 2,
           reports: (currentUser.reportsCount || 0) * 1,
+          connections: (currentUser.connections?.length || 0) * 20,
           admin: currentUser.role === 'admin' ? 500 : 0
       };
   };
@@ -124,6 +125,7 @@ export const Rankings: React.FC = () => {
                           <ScoreRow label="Valor Inventário" rule="1 XP / R$ 1k" value={myStats?.value || 0} />
                           <ScoreRow label="Verificações" rule="+2 XP/uso" value={myStats?.checks || 0} />
                           <ScoreRow label="Reports" rule="+1 XP/uso" value={myStats?.reports || 0} />
+                          <ScoreRow label="Conexões" rule="+20 XP/pessoa" value={myStats?.connections || 0} />
                           {myStats?.admin ? (
                               <ScoreRow label="Bônus Admin" rule="+500 XP" value={myStats.admin} highlight />
                           ) : null}

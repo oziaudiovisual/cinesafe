@@ -43,17 +43,11 @@ export const Notifications: React.FC = () => {
   const [modalProcessing, setModalProcessing] = useState(false);
 
   useEffect(() => {
-    const loadData = async () => {
-      if (user) {
-        const [n, connections] = await Promise.all([
-          notificationService.getUserNotifications(user.id),
-          userService.getConnections(user.id),
-        ]);
-        setNotifications(n);
-        setMyConnections(connections);
-      }
-    };
-    loadData();
+    if (!user) return;
+    userService.getConnections(user.id).then(setMyConnections);
+    // Tempo real: as notificações chegam sem precisar recarregar a página.
+    const unsubscribe = notificationService.subscribeUserNotifications(user.id, setNotifications);
+    return () => unsubscribe();
   }, [user]);
 
   const handleNotificationClick = async (notif: Notification) => {
@@ -106,8 +100,23 @@ export const Notifications: React.FC = () => {
     setModalProcessing(true);
     const success = await userService.addConnection(user.id, notif.actionPayload.requesterId);
     if (success) {
-        setNotifications(prev => prev.filter(n => n.id !== notif.id));
+        // A remoção da lista é conduzida pelo onSnapshot após o deleteDoc (fonte única da verdade).
         await notificationService.deleteNotification(notif.id);
+        // Avisa quem enviou o convite que foi aceito (antes ele só descobria recarregando).
+        await notificationService.createNotification({
+            id: crypto.randomUUID(),
+            toUserId: notif.actionPayload.requesterId,
+            fromUserId: user.id,
+            fromUserName: user.name,
+            fromUserAvatar: user.avatarUrl,
+            fromUserReputation: user.reputationPoints,
+            fromUserConnectionsCount: user.connections?.length || 0,
+            type: 'CONNECTION_ACCEPTED',
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+            read: false,
+            message: `${user.name} aceitou seu convite e agora faz parte da sua Rede de Confiança.`,
+        });
         const updatedConnections = await userService.getConnections(user.id);
         setMyConnections(updatedConnections);
         setModalConfig({ title: "Conectado!", message: `Você agora faz parte da rede de ${notif.fromUserName}.`, confirmLabel: "OK", isDestructive: false, action: async () => setModalOpen(false) });
@@ -125,7 +134,7 @@ export const Notifications: React.FC = () => {
     const success = await equipmentService.transferEquipmentOwnership(equipmentId, user.id, transactionValue);
     
     if (success) {
-        setNotifications(prev => prev.filter(n => n.id !== notif.id));
+        // Remoção conduzida pelo onSnapshot após o deleteDoc.
         await notificationService.deleteNotification(notif.id);
         setModalConfig({ title: "Transferência Concluída", message: "Equipamento recebido! Ele já consta no seu inventário.", confirmLabel: "OK", isDestructive: false, action: async () => setModalOpen(false) });
         setModalOpen(true);
@@ -189,6 +198,7 @@ export const Notifications: React.FC = () => {
                                         {notif.type === 'SALE_INTEREST' && 'Interesse em Compra'}
                                         {notif.type === 'STOLEN_FOUND' && <span className="text-red-400">Alerta de Segurança</span>}
                                         {notif.type === 'CONNECTION_REQUEST' && 'Convite de Conexão'}
+                                        {notif.type === 'CONNECTION_ACCEPTED' && <span className="text-green-400">Conexão Aceita</span>}
                                         {notif.type === 'ITEM_TRANSFER' && 'Transferência de Equipamento'}
                                     </div>
                                     <p className="text-brand-300 text-sm leading-relaxed mb-4">{notif.message}</p>

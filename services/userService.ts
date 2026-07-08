@@ -2,10 +2,19 @@
 import { db, storage } from './firebase';
 import {
   collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
-  query, where, getDocs, getCountFromServer, increment, arrayUnion, arrayRemove, writeBatch
+  query, where, getDocs, getCountFromServer, getAggregateFromServer, sum, count,
+  increment, arrayUnion, arrayRemove, writeBatch
 } from 'firebase/firestore';
 import { Equipment, User, EquipmentStatus, UsageStats, DetailedStats, Notification } from '../types';
 import { processImageForWebP, resilientUpload, cropImageHelper } from '../utils/imageProcessor';
+
+// Limites do plano gratuito. Premium = indicar PREMIUM_REFERRALS amigos ou ser admin.
+export const PREMIUM_REFERRALS = 5;
+export const FREE_LIMITS = {
+  inventory: 5,       // itens no inventário
+  serialChecks: 5,    // verificações de serial por mês
+  contactReveals: 3,  // interesses/contatos enviados por mês
+};
 
 // --- Logic ---
 
@@ -68,7 +77,7 @@ export const userService = {
   },
 
   isPremium: (user: User): boolean => {
-    return (user.referralCount || 0) >= 5 || user.role === 'admin';
+    return (user.referralCount || 0) >= PREMIUM_REFERRALS || user.role === 'admin';
   },
 
   checkLimit: async (userId: string, type: 'inventory' | 'check' | 'contact'): Promise<boolean> => {
@@ -78,18 +87,18 @@ export const userService = {
     const currentMonth = new Date().toISOString().slice(0, 7);
     if (type === 'inventory') {
       const q = query(collection(db, 'equipment'), where('ownerId', '==', userId));
-      const count = (await getCountFromServer(q)).data().count;
-      return count < 3;
+      const itemCount = (await getCountFromServer(q)).data().count;
+      return itemCount < FREE_LIMITS.inventory;
     }
     if (type === 'check') {
       const stats = user.usageStats?.serialChecks || { count: 0, month: '' };
       if (stats.month !== currentMonth) return true;
-      return stats.count < 1;
+      return stats.count < FREE_LIMITS.serialChecks;
     }
     if (type === 'contact') {
       const stats = user.usageStats?.contactReveals || { count: 0, month: '' };
       if (stats.month !== currentMonth) return true;
-      return stats.count < 2;
+      return stats.count < FREE_LIMITS.contactReveals;
     }
     return false;
   },
@@ -179,10 +188,11 @@ export const userService = {
   addConnection: async (userAId: string, userBId: string) => {
     if (userAId === userBId) return false;
     try {
-      const refA = doc(db, 'users', userAId);
-      const refB = doc(db, 'users', userBId);
-      await updateDoc(refA, { connections: arrayUnion(userBId) });
-      await updateDoc(refB, { connections: arrayUnion(userAId) });
+      // Atômico: ou os dois lados ganham a conexão, ou nenhum (evita conexão unilateral).
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'users', userAId), { connections: arrayUnion(userBId) });
+      batch.update(doc(db, 'users', userBId), { connections: arrayUnion(userAId) });
+      await batch.commit();
       return true;
     } catch (e) { return false; }
   },
@@ -237,25 +247,33 @@ export const userService = {
   },
 
   getGlobalDetailedStats: async (): Promise<DetailedStats> => {
-    const eqSnap = await getDocs(collection(db, 'equipment'));
-    const equipment = eqSnap.docs.map(d => d.data() as Equipment);
-    const totalItems = equipment.length;
-    const safeItemsCount = equipment.filter(e => e.status === EquipmentStatus.SAFE).length;
-    const totalValue = equipment.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
-    const stolenItems = equipment.filter(e => e.status === EquipmentStatus.STOLEN).length;
-    const itemsForRentCount = equipment.filter(e => e.isForRent).length;
-    const itemsForSaleCount = equipment.filter(e => e.isForSale).length;
+    // Usa queries de AGREGAÇÃO (count/sum) em vez de baixar as coleções inteiras.
+    const eqCol = collection(db, 'equipment');
+    const histCol = collection(db, 'theft_history');
 
-    const histSnap = await getDocs(collection(db, 'theft_history'));
-    const recoveredItems = histSnap.size;
-    let recoveredValue = 0;
-    histSnap.forEach(doc => { recoveredValue += Number(doc.data().equipmentValue) || 0; });
+    const [totalAgg, safeAgg, stolenAgg, rentAgg, saleAgg, valueAgg, histAgg] = await Promise.all([
+      getCountFromServer(eqCol),
+      getCountFromServer(query(eqCol, where('status', '==', 'SAFE'))),
+      getCountFromServer(query(eqCol, where('status', '==', 'STOLEN'))),
+      getCountFromServer(query(eqCol, where('isForRent', '==', true))),
+      getCountFromServer(query(eqCol, where('isForSale', '==', true))),
+      getAggregateFromServer(eqCol, { total: sum('value') }),
+      getAggregateFromServer(histCol, { c: count(), total: sum('equipmentValue') }),
+    ]);
 
-    // Global stats don't include notification counts (private data)
-    const rentalOffers = 0;
-    const saleOffers = 0;
-
-    return { totalItems, safeItemsCount, totalValue, stolenItems, recoveredItems, recoveredValue, rentalOffers, saleOffers, itemsForRentCount, itemsForSaleCount };
+    return {
+      totalItems: totalAgg.data().count,
+      safeItemsCount: safeAgg.data().count,
+      totalValue: valueAgg.data().total || 0,
+      stolenItems: stolenAgg.data().count,
+      recoveredItems: histAgg.data().c,
+      recoveredValue: histAgg.data().total || 0,
+      // Contadores de notificação são dados privados; não entram no global.
+      rentalOffers: 0,
+      saleOffers: 0,
+      itemsForRentCount: rentAgg.data().count,
+      itemsForSaleCount: saleAgg.data().count,
+    };
   },
 
   getCommunitySafetyData: async (): Promise<{ lat: number, lng: number, address: string, date: string, itemName: string }[]> => {

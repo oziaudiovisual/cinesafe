@@ -1,12 +1,32 @@
 
 import { db } from './firebase';
-import { 
-  collection, doc, setDoc, updateDoc, deleteDoc, 
-  query, where, getDocs, increment
+import {
+  collection, doc, setDoc, updateDoc, deleteDoc,
+  query, where, getDocs, increment, onSnapshot
 } from 'firebase/firestore';
 import { Notification } from '../types';
 
 export const notificationService = {
+  // Tempo real: escuta as notificações do usuário e já apaga as expiradas (faxina).
+  // Retorna a função de unsubscribe.
+  subscribeUserNotifications: (userId: string, callback: (notifs: Notification[]) => void) => {
+    const q = query(collection(db, 'notifications'), where('toUserId', '==', userId));
+    return onSnapshot(q, (snap) => {
+      const now = new Date();
+      const active: Notification[] = [];
+      snap.docs.forEach(d => {
+        const n = d.data() as Notification;
+        if (n.expiresAt && new Date(n.expiresAt) <= now) {
+          deleteDoc(doc(db, 'notifications', n.id)).catch(() => {});
+        } else {
+          active.push(n);
+        }
+      });
+      active.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      callback(active);
+    }, () => callback([]));
+  },
+
   createNotification: async (notification: Notification) => {
     try {
         await setDoc(doc(db, 'notifications', notification.id), notification);

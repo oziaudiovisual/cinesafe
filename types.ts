@@ -55,7 +55,6 @@ export interface Equipment {
     name: string;
     avatarUrl: string;
     location: string;
-    contactPhone?: string;
   };
 }
 
@@ -100,11 +99,12 @@ export interface User {
 }
 
 // Updated Notification Types
-export type NotificationType = 
-  | 'RENTAL_INTEREST' 
-  | 'SALE_INTEREST' 
-  | 'STOLEN_FOUND' 
-  | 'CONNECTION_REQUEST' 
+export type NotificationType =
+  | 'RENTAL_INTEREST'
+  | 'SALE_INTEREST'
+  | 'STOLEN_FOUND'
+  | 'CONNECTION_REQUEST'
+  | 'CONNECTION_ACCEPTED'
   | 'ITEM_TRANSFER';
 
 export interface Notification {

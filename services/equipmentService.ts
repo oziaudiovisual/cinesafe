@@ -23,11 +23,14 @@ export const equipmentService = {
 
     const itemWithProfile: Equipment = {
       ...item,
+      // Normaliza o serial (maiúsculas + sem espaços) para verificação consistente.
+      serialNumber: String(item.serialNumber || '').trim().toUpperCase(),
+      // NÃO denormaliza o telefone no item: a vitrine é pública e o telefone
+      // vazaria. O contato acontece via notificação (fromUserPhone).
       ownerProfile: ownerProfile ? {
         name: ownerProfile.name,
         avatarUrl: ownerProfile.avatarUrl,
-        location: ownerProfile.location,
-        contactPhone: ownerProfile.contactPhone
+        location: ownerProfile.location
       } : undefined
     };
 
@@ -37,6 +40,8 @@ export const equipmentService = {
   updateEquipment: async (updatedItem: Equipment) => {
     // Ensure profile data is fresh/present on update if available
     let dataToSave = { ...updatedItem };
+    // Mantém o serial normalizado também na edição (consistente com addEquipment/checkSerial).
+    dataToSave.serialNumber = String(updatedItem.serialNumber || '').trim().toUpperCase();
 
     if (!dataToSave.ownerProfile) {
       const ownerProfile = await userService.getUserProfile(updatedItem.ownerId);
@@ -44,8 +49,7 @@ export const equipmentService = {
         dataToSave.ownerProfile = {
           name: ownerProfile.name,
           avatarUrl: ownerProfile.avatarUrl,
-          location: ownerProfile.location,
-          contactPhone: ownerProfile.contactPhone
+          location: ownerProfile.location
         };
       }
     }
@@ -78,24 +82,29 @@ export const equipmentService = {
   checkSerial: async (serial: string): Promise<Equipment | undefined> => {
     try {
       if (!serial) return undefined;
-      const safeSerial = String(serial).trim();
+      const trimmed = String(serial).trim();
+      const upper = trimmed.toUpperCase();
+      // Tenta o valor normalizado (docs novos) e, se não achar, o cru (docs legados
+      // que ainda não foram normalizados) — evita regressão na verificação de serial.
+      const candidates = upper === trimmed ? [upper] : [upper, trimmed];
 
-      const q = query(collection(db, 'equipment'), where('serialNumber', '==', safeSerial));
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
-        const item = snap.docs[0].data() as Equipment;
-        // Refresh profile on check to be safe, though likely denormalized data is enough
-        if (!item.ownerProfile) {
-          const owner = await userService.getUserProfile(item.ownerId);
-          if (owner) {
-            item.ownerProfile = {
-              name: owner.name, avatarUrl: owner.avatarUrl,
-              location: owner.location, contactPhone: owner.contactPhone
-            };
+      for (const value of candidates) {
+        const q = query(collection(db, 'equipment'), where('serialNumber', '==', value));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const item = snap.docs[0].data() as Equipment;
+          // Refresh profile on check to be safe, though likely denormalized data is enough
+          if (!item.ownerProfile) {
+            const owner = await userService.getUserProfile(item.ownerId);
+            if (owner) {
+              item.ownerProfile = {
+                name: owner.name, avatarUrl: owner.avatarUrl,
+                location: owner.location
+              };
+            }
           }
+          return item;
         }
-        return item;
       }
       return undefined;
     } catch (e) { return undefined; }
@@ -179,10 +188,13 @@ export const equipmentService = {
   },
 
   uploadInvoiceImage: async (file: File, ownerId: string, equipmentId: string): Promise<string | null> => {
-    const optimizedBlob = await processImageForWebP(file);
-    const fileName = `users/${ownerId}/invoices/${equipmentId}_${Date.now()}.webp`;
+    // PDFs vão direto (o pipeline WebP só lida com imagem e quebraria com PDF).
+    const isPdf = file.type === 'application/pdf';
+    const blob: Blob = isPdf ? file : await processImageForWebP(file);
+    const ext = isPdf ? 'pdf' : 'webp';
+    const fileName = `users/${ownerId}/invoices/${equipmentId}_${Date.now()}.${ext}`;
     const storageRef = storage.ref(fileName);
-    return resilientUpload(storageRef, optimizedBlob);
+    return resilientUpload(storageRef, blob);
   },
 
   transferEquipmentOwnership: async (itemId: string, newOwnerId: string, transactionValue?: number): Promise<boolean> => {
@@ -206,8 +218,7 @@ export const equipmentService = {
         ownerProfile: newOwnerProfile ? {
           name: newOwnerProfile.name,
           avatarUrl: newOwnerProfile.avatarUrl,
-          location: newOwnerProfile.location,
-          contactPhone: newOwnerProfile.contactPhone
+          location: newOwnerProfile.location
         } : null
       };
 
