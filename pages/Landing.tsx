@@ -168,7 +168,7 @@ export const Landing: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map((item, index) => {
+              {filtered.slice(0, 6).map((item, index) => {
                 return (
                   <div
                     key={`${item.id}-${index}`}
@@ -224,6 +224,16 @@ export const Landing: React.FC = () => {
                   </div>
                 );
               })}
+            </div>
+
+            {/* CTA para ver todos */}
+            {filtered.length > 6 && (
+              <div className="text-center mt-8">
+                <button onClick={goToRegister} className="px-8 py-3 rounded-xl bg-white/5 text-white font-bold border border-white/10 hover:bg-accent-primary/10 hover:border-accent-primary/30 transition-all inline-flex items-center gap-2">
+                  Ver todos os {filtered.length} equipamentos <Icons.ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             </div>
           )}
         </section>
