@@ -272,9 +272,13 @@ for insert with check (from_user_id = auth.uid());
 - **Só o destinatário** (`to_user_id`) lê, atualiza e apaga.
 - Qualquer autenticado **cria**, desde que **assine como remetente**
   (`from_user_id = auth.uid()`) — impede forjar notificação em nome de terceiro.
-- **Importante:** com a RLS ligada e a policy de `insert` **ausente**, todo envio
-  do cliente é negado por _default deny_ — foi essa a causa de "enviei interesse
-  e o dono não recebeu". A migração acima (re)cria a policy `insert`.
+- **Importante (causa raiz do bug "enviei e o dono não recebeu"):** existia uma
+  policy de `insert` legada **RESTRICTIVE** (`notifications_insert_auth`) com
+  `to_user_id = auth.uid()`. Como policies RESTRICTIVE se combinam por **AND**,
+  ela só permitia criar notificação **para si mesmo** e bloqueava avisar o dono
+  de um item (HTTP 403 / `42501`) — mesmo com uma policy permissiva de INSERT
+  presente. A migração cria `notifications_insert_sender`
+  (`from_user_id = auth.uid()`) e **remove** a legada (e as `*_own` redundantes).
 - Inserts feitos por funções `SECURITY DEFINER` de sorteio **ignoram** a RLS.
 - A auto-exclusão por `expires_at` acontece no cliente durante o `subscribe`
   (faxina), não na RLS. Ver [`notifications.md`](./features/notifications.md).

@@ -239,7 +239,7 @@ create policy notifications_insert_sender on public.notifications
 ```
 
 - **Leitura estritamente do destinatário**: ninguém além de `to_user_id` lê a linha. O filtro do canal Realtime (`to_user_id=eq.<uid>`) e o `getUserNotifications` batem com a policy de `select`.
-- **Criação assinada**: quem cria precisa gravar o próprio uid em `from_user_id` (não dá para forjar remetente). **Esta policy é o que faltava** e causava o bug de notificações não entregues — sem ela, com RLS ligada, todo `insert` do cliente é negado por _default deny_.
+- **Criação assinada**: quem cria precisa gravar o próprio uid em `from_user_id` (não dá para forjar remetente). **Esta policy resolve o bug** de notificações não entregues: existia uma policy legada **RESTRICTIVE** `notifications_insert_auth` (`to_user_id = auth.uid()`) que, por ser combinada com AND, só deixava criar notificação **para si mesmo** — logo, avisar o dono de um item era negado (HTTP 403 / `42501`) mesmo com a policy permissiva presente. A migração cria `notifications_insert_sender` e remove a legada.
 - **Gerência só do destinatário**: `update` (marcar lida) e `delete` (faxina/aceite) exigem ser o `to_user_id`.
 - **Inserts de servidor**: as funções `SECURITY DEFINER` de sorteio (`participar_sorteio`, `ensure_participation_reminder`, `resetar_participacoes_sorteio`) inserem notificações **ignorando a RLS** — por isso os lembretes de sorteio funcionavam mesmo com a policy de `insert` ausente.
 - **Escrita cruzada de `notification_stats`**: o incremento em `createNotification` grava em `users/{toUserId}` (outro usuário). Depende da policy de `update` de `users` liberar esse conjunto de campos; se falhar, **não** bloqueia a entrega (a notificação já foi inserida).

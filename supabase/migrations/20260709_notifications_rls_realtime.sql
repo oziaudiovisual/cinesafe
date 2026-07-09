@@ -1,91 +1,66 @@
 -- ============================================================================
--- Notificações: RLS de INSERT + Realtime
+-- Notificações: RLS de INSERT (+ Realtime opcional)
 -- Corrige: "enviei interesse de aluguel/venda e o proprietário não recebeu".
 --
--- CAUSA RAIZ
---   public.notifications está com RLS habilitado, mas SEM uma policy de INSERT
---   que aceite o remetente autenticado. Todo envio do cliente
---   (services/notificationService.ts -> supabase.from('notifications').upsert)
---   é negado pela RLS e o serviço engolia o erro (retornava false sem avisar a
---   UI). Sintoma: remetente vê "enviado", destinatário nunca recebe.
---
---   Isso afeta TODOS os tipos disparados pelo cliente — interesse de aluguel,
---   interesse de compra, alerta de item roubado, convite/aceite de conexão,
---   transferência de posse e aviso de contrato atrasado. Os inserts feitos por
---   funções SECURITY DEFINER de sorteio (participar_sorteio, etc.) NÃO passam
---   por esta RLS, por isso o lembrete de sorteio continuava funcionando.
+-- CAUSA RAIZ (confirmada em produção)
+--   A tabela public.notifications tinha policies criadas à mão no painel que
+--   contradiziam o modelo do app. Em especial, uma policy de INSERT legada
+--   `notifications_insert_auth` **RESTRICTIVE** com `to_user_id = auth.uid()`:
+--   como policies RESTRICTIVE se combinam por AND, ela permitia criar notificação
+--   apenas PARA SI MESMO — bloqueando (HTTP 403 / 42501) qualquer aviso a OUTRO
+--   usuário (interesse de aluguel/venda, alerta de roubo, convite, transferência,
+--   atraso). Os inserts de sorteio (funções SECURITY DEFINER) ignoram a RLS, por
+--   isso só aqueles funcionavam.
 --
 -- COMO APLICAR
---   Cole este arquivo inteiro no Supabase -> SQL Editor -> Run.
---   É idempotente (pode rodar mais de uma vez) e apenas (re)cria as policies no
---   modelo já documentado em docs/features/notifications.md — não afeta nenhuma
---   escrita legítima.
+--   Cole a PARTE 1 no Supabase -> SQL Editor -> Run. É idempotente.
+--   A PARTE 2 (realtime) é OPCIONAL e deve ser rodada SEPARADAMENTE (ver nota).
 --
--- MODELO DE ACESSO (igual ao documentado)
+-- MODELO DE ACESSO (canônico)
 --   select / update / delete  -> só o destinatário   (to_user_id  = auth.uid())
 --   insert                    -> remetente assinado   (from_user_id = auth.uid())
 -- ============================================================================
 
-begin;
-
--- Garante RLS ligado (idempotente).
+-- ====================== PARTE 1 — RLS + policies (ESSENCIAL) =================
 alter table public.notifications enable row level security;
 
--- Privilégio de tabela para o papel autenticado (a RLS ainda filtra por policy).
 grant select, insert, update, delete on public.notifications to authenticated;
 
--- SELECT: só o destinatário lê as próprias notificações.
+-- Modelo canônico (permissive):
 drop policy if exists notifications_select_recipient on public.notifications;
 create policy notifications_select_recipient on public.notifications
   for select using (to_user_id = auth.uid());
 
--- INSERT: qualquer autenticado cria, DESDE QUE assine como remetente
---         (impede forjar notificação em nome de terceiro). ESTE é o buraco.
 drop policy if exists notifications_insert_sender on public.notifications;
 create policy notifications_insert_sender on public.notifications
   for insert with check (from_user_id = auth.uid());
 
--- UPDATE: só o destinatário (ex.: marcar como lida).
 drop policy if exists notifications_update_recipient on public.notifications;
 create policy notifications_update_recipient on public.notifications
   for update using (to_user_id = auth.uid()) with check (to_user_id = auth.uid());
 
--- DELETE: só o destinatário (faxina de expiradas / aceite de conexão/transferência).
 drop policy if exists notifications_delete_recipient on public.notifications;
 create policy notifications_delete_recipient on public.notifications
   for delete using (to_user_id = auth.uid());
 
--- ----------------------------------------------------------------------------
--- Realtime: entrega ao vivo via postgres_changes. O app assina
--- notificationService.subscribeUserNotifications com filtro to_user_id=eq.<uid>.
--- Sem a tabela na publicação, a notificação só apareceria após recarregar.
--- replica identity full: garante que os eventos UPDATE/DELETE carreguem
--- to_user_id para o filtro do canal (INSERT já traz a linha nova completa).
--- ----------------------------------------------------------------------------
-alter table public.notifications replica identity full;
+-- Remove as policies legadas do painel (a `_insert_auth` RESTRICTIVE era a causa
+-- raiz; as `_own` eram duplicatas). Sem elas, sobra só o modelo canônico acima.
+drop policy if exists notifications_insert_auth on public.notifications;
+drop policy if exists notifications_select_own  on public.notifications;
+drop policy if exists notifications_update_own  on public.notifications;
+drop policy if exists notifications_delete_own  on public.notifications;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime'
-      and schemaname = 'public'
-      and tablename = 'notifications'
-  ) then
-    alter publication supabase_realtime add table public.notifications;
-  end if;
-end $$;
+-- Conferência (deve retornar exatamente 4 linhas):
+--   select policyname, cmd, permissive from pg_policies
+--    where schemaname='public' and tablename='notifications' order by cmd;
 
-commit;
-
--- ============================================================================
--- VERIFICAÇÃO (rode depois de aplicar)
---   -- Deve listar as 4 policies (select/insert/update/delete):
---   select policyname, cmd from pg_policies
---    where schemaname = 'public' and tablename = 'notifications'
---    order by cmd;
+-- ====================== PARTE 2 — Realtime (OPCIONAL) =======================
+-- Só é preciso para ENTREGA AO VIVO (sem recarregar). Sem isto, a notificação
+-- ainda aparece quando o destinatário abre/recarrega o inbox (carga inicial).
 --
---   -- Deve retornar 1 linha (tabela na publicação de realtime):
---   select 1 from pg_publication_tables
---    where pubname = 'supabase_realtime' and tablename = 'notifications';
--- ============================================================================
+-- ⚠️ Rode SEPARADO da Parte 1 (selecione só estas 2 linhas -> Run). Se falhar
+-- com "must be owner of publication", use o Dashboard:
+--   Database -> Replication -> supabase_realtime -> adicionar `notifications`.
+--
+-- alter table public.notifications replica identity full;
+-- alter publication supabase_realtime add table public.notifications;
