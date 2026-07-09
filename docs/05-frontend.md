@@ -82,56 +82,56 @@ Detalhamento de cada página em `reference/pages.md` e por feature em `features/
 
 ---
 
-## 3. Padrão de rotas protegidas
+## 3. Shell persistente + rotas protegidas
 
-Duas casca de rota, ambas em `App.tsx`, decidem visibilidade a partir de `useAuth()`:
+O roteamento usa uma **rota de layout** (React Router v6) para manter o `Layout` (menu/sidebar) **montado de forma persistente** entre navegações. Só o conteúdo interno (`<Outlet/>`) troca ao mudar de página, e o `<Suspense>` vive **dentro** do `Layout` — então o menu nunca "pisca" durante o carregamento de um chunk. Ver ADR [`0010-shell-persistente-de-layout`](decisions/0010-shell-persistente-de-layout.md).
 
-### `ProtectedRoute` (`App.tsx:53-67`)
+### `AppShell` (rota de layout, `App.tsx`)
 
 ```tsx
-const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> =
-  ({ children, adminOnly = false }) => {
+const AppShell: React.FC = () => {
   const { user, loading } = useAuth();
-  if (loading) return <PageLoader />;                       // sessão ainda resolvendo
-  if (!user) return <Navigate to="/login" replace />;       // não autenticado
-  if (adminOnly && user.role !== 'admin')
-    return <Navigate to="/" replace />;                     // sem privilégio admin
-  return <Layout>{children}</Layout>;                       // OK: injeta o chrome
+  const location = useLocation();
+  if (loading) return <PageLoader />;                        // sessão resolvendo
+  if (!user) {                                               // visitante:
+    return location.pathname === '/'
+      ? <Suspense fallback={<PageLoader />}><Landing /></Suspense>  // "/" = vitrine pública
+      : <Navigate to="/login" replace />;                    // resto exige login
+  }
+  return (
+    <Layout>                                                 {/* montado UMA vez */}
+      <Suspense fallback={<ContentLoader />}>                {/* só o miolo carrega */}
+        <Outlet />                                           {/* a página troca aqui */}
+      </Suspense>
+    </Layout>
+  );
 };
 ```
 
-Regras que ela codifica:
+As rotas autenticadas são **filhas** dessa rota de layout (`<Route element={<AppShell/>}>` com `index` = `Home` e `path="inventory"`, `chat`, …). Regras codificadas:
 
-1. Enquanto `loading` (checagem de sessão em andamento), mostra `PageLoader` — evita "piscar" a tela de login antes de saber se há sessão.
-2. Sem `user`, redireciona para `/login` com `replace` (não empilha histórico).
-3. Com `adminOnly` e `role !== 'admin'`, redireciona para `/` (a Home/Landing decide o que mostrar). É a **única** rota que usa `adminOnly`: `/admin` (`App.tsx:143`).
-4. Só rotas protegidas recebem o `<Layout>` (sidebar/header). `/login`, `/register` e a `Landing` renderizam sem o chrome.
+1. Enquanto `loading`, `PageLoader` (tela cheia) — evita piscar a tela de login antes de saber se há sessão.
+2. Visitante em `/` vê a `Landing`; em qualquer outra rota é mandado a `/login` (`replace`).
+3. Autenticado: `Layout` fixo + `Outlet`. **Navegar entre páginas não remonta o `Layout`** — o menu permanece.
+4. `/login`, `/register` ficam **fora** do shell (sem chrome), cada uma com seu próprio `<Suspense>`.
 
-> Segurança: `ProtectedRoute` é apenas guarda de UI. A autorização real é imposta pelo Firebase (Auth + Firestore Rules). Ver `04-security.md` e `../FIREBASE_RULES.md`.
+### `AdminOnly` (`App.tsx`)
 
-### `RootRoute` (`App.tsx:72-79`)
+Guarda a rota `/admin`: `if (user?.role !== 'admin') return <Navigate to="/" replace />`. O `AppShell` já garantiu autenticação, então aqui só resta a checagem de papel.
 
-```tsx
-const RootRoute: React.FC = () => {
-  const { user, loading } = useAuth();
-  if (loading) return <PageLoader />;
-  if (!user) return <Landing />;              // vitrine pública para visitantes
-  return <Layout><Home /></Layout>;           // dashboard pessoal para logados
-};
-```
-
-A rota `/` é **aberta** (como a fachada de um marketplace): visitantes veem a `Landing`. Assim que há sessão, `/` vira a `Home` dentro do `Layout`. Todo recurso real, porém, continua atrás de `ProtectedRoute` — usar qualquer coisa exige login/cadastro.
+> Segurança: `AppShell`/`AdminOnly` são apenas guardas de UI. A autorização real é imposta pelo **Supabase** (Auth + RLS/permissões). Ver `04-security.md`.
 
 ```mermaid
 flowchart TD
   A["Requisição de rota"] --> B{"loading?"}
-  B -->|sim| P["PageLoader"]
+  B -->|sim| P["PageLoader (tela cheia)"]
   B -->|não| C{"user?"}
-  C -->|não, rota protegida| L["Navigate /login"]
   C -->|não, rota '/'| LP["Landing (público)"]
-  C -->|sim| D{"adminOnly && role!=admin?"}
-  D -->|sim| H["Navigate / "]
-  D -->|não| R["Layout + Página"]
+  C -->|não, outra rota| L["Navigate /login"]
+  C -->|sim| R["Layout FIXO + Suspense(ContentLoader) + Outlet"]
+  R --> D{"rota /admin e role!=admin?"}
+  D -->|sim| H["Navigate /"]
+  D -->|não| PG["Página"]
 ```
 
 ---
@@ -163,13 +163,14 @@ Comportamento:
 
 As 17 páginas são declaradas assim (`App.tsx:27-43`), ex.: `const Inventory = lazyWithReload(() => import('./pages/Inventory').then(m => ({ default: m.Inventory })))`. O `.then` reexporta o nome porque as páginas usam export nomeado, não default.
 
-### `PageLoader` (`App.tsx:46-50`)
+### `PageLoader` e `ContentLoader` (`App.tsx`)
 
-Fallback do `<Suspense>` e estado `loading` das rotas: tela cheia `bg-brand-950` com spinner circular (`border-t-accent-primary animate-spin`). É o mesmo componente reaproveitado por `ProtectedRoute` e `RootRoute`.
+- **`PageLoader`** — tela cheia `bg-brand-950` com spinner. Usado no estado `loading` da sessão e no `<Suspense>` das rotas **sem** chrome (`/login`, `/register`, `Landing`).
+- **`ContentLoader`** — spinner **só na área de conteúdo** (`py-32`, sem tela cheia). É o fallback do `<Suspense>` que vive **dentro** do `Layout` no `AppShell`. Enquanto o chunk de uma página carrega, o menu permanece visível e só o miolo mostra o spinner — é o que elimina o "flash" de navegação.
 
-### `RouteErrorBoundary` (`App.tsx:84-112`)
+### `RouteErrorBoundary` (`App.tsx`)
 
-Class component (único jeito de capturar erros de render em React) que envolve todo o `<Suspense>`:
+Class component (único jeito de capturar erros de render em React) que envolve o `<Routes>`:
 
 - `getDerivedStateFromError` → `hasError = true`; `componentDidCatch` loga no console.
 - Em erro, renderiza um cartão centralizado: "Não foi possível carregar esta página." + botão **Recarregar** que limpa `sessionStorage['chunkReloadAt']` e chama `window.location.reload()`, permitindo nova tentativa de reload automático.

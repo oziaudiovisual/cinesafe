@@ -32,6 +32,7 @@ commits.
 | [0007](0007-code-splitting-e-resiliencia-chunk-stale.md) | Code-splitting e resiliência a *chunk stale* | Aceito | 2026-07-08 |
 | [0008](0008-busca-e-paginacao-sem-servico-externo.md) | Busca e paginação sem serviço externo | Aceito | 2026-07-08 |
 | [0009](0009-chat-interno-remocao-do-whatsapp.md) | Chat interno como canal único (remoção do WhatsApp) | Aceito | 2026-07-08 |
+| [0010](0010-shell-persistente-de-layout.md) | Shell persistente de layout (fim do flash de navegação) | Aceito | 2026-07-08 |
 
 ## Como escrever um novo ADR
 

@@ -1,6 +1,6 @@
 
 import React, { Suspense, lazy } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { Layout } from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -61,33 +61,45 @@ const PageLoader = () => (
   </div>
 );
 
-// Protected Route Component
-const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ children, adminOnly = false }) => {
+// Loader da ÁREA DE CONTEÚDO (não é tela cheia). Enquanto um chunk carrega, o
+// menu/sidebar continua visível e só o miolo mostra o spinner.
+const ContentLoader = () => (
+  <div className="flex items-center justify-center py-32">
+    <div className="w-10 h-10 border-4 border-brand-800 border-t-accent-primary rounded-full animate-spin"></div>
+  </div>
+);
+
+// Shell da aplicação autenticada (rota de layout). O `Layout` (menu) fica montado
+// de forma PERSISTENTE entre navegações — só o conteúdo interno (`Outlet`) troca —
+// e o `Suspense` vive DENTRO do Layout, então o menu nunca "pisca" ao carregar uma
+// página. Visitantes veem a Landing pública em "/" e são mandados ao login no resto
+// (todo recurso real continua atrás de autenticação).
+const AppShell: React.FC = () => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <PageLoader />;
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return location.pathname === '/'
+      ? <Suspense fallback={<PageLoader />}><Landing /></Suspense>
+      : <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && user.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-
-  return <Layout>{children}</Layout>;
+  return (
+    <Layout>
+      <Suspense fallback={<ContentLoader />}>
+        <Outlet />
+      </Suspense>
+    </Layout>
+  );
 };
 
-// Root Route: public landing for visitors, personal dashboard for logged-in users.
-// The main page is open (like a marketplace storefront), but every actual feature
-// still lives behind ProtectedRoute, so using anything requires login/register.
-const RootRoute: React.FC = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) return <PageLoader />;
-  if (!user) return <Landing />;
-
-  return <Layout><Home /></Layout>;
+// Guard de rota só-admin (o AppShell já garantiu que há usuário autenticado).
+const AdminOnly: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  if (user?.role !== 'admin') return <Navigate to="/" replace />;
+  return <>{children}</>;
 };
 
 // Rede de segurança final: se qualquer rota estourar um erro (ex.: chunk que não
@@ -140,34 +152,31 @@ function App() {
     <AuthProvider>
       <HashRouter>
         <RouteErrorBoundary>
-        <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-
-            {/* Public landing (open) for visitors; dashboard for logged-in users */}
-            <Route path="/" element={<RootRoute />} />
-
-            {/* Protected Routes */}
-            <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-            <Route path="/report-theft" element={<ProtectedRoute><TheftReport /></ProtectedRoute>} />
-            <Route path="/rentals" element={<ProtectedRoute><Rentals /></ProtectedRoute>} />
-            <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-            <Route path="/check-serial" element={<ProtectedRoute><SerialCheck /></ProtectedRoute>} />
-            <Route path="/safety" element={<ProtectedRoute><SafetyMap /></ProtectedRoute>} />
-            <Route path="/rankings" element={<ProtectedRoute><Rankings /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            {/* Rotas públicas sem sidebar — cada uma com seu próprio Suspense */}
+            <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+            <Route path="/register" element={<Suspense fallback={<PageLoader />}><Register /></Suspense>} />
             <Route path="/notifications" element={<Navigate to="/chat?tab=notifications" replace />} />
-            <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
-            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-            <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
-            <Route path="/raffles" element={<ProtectedRoute><Raffles /></ProtectedRoute>} />
 
-            {/* Admin Route */}
-            <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />
+            {/* Shell autenticado: o Layout (menu) fica FIXO; só o Outlet troca.
+                Visitantes veem a Landing em "/" (tratado dentro do AppShell). */}
+            <Route element={<AppShell />}>
+              <Route index element={<Home />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route path="report-theft" element={<TheftReport />} />
+              <Route path="rentals" element={<Rentals />} />
+              <Route path="sales" element={<Sales />} />
+              <Route path="check-serial" element={<SerialCheck />} />
+              <Route path="safety" element={<SafetyMap />} />
+              <Route path="rankings" element={<Rankings />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="network" element={<Network />} />
+              <Route path="chat" element={<Chat />} />
+              <Route path="contracts" element={<Contracts />} />
+              <Route path="raffles" element={<Raffles />} />
+              <Route path="admin" element={<AdminOnly><AdminDashboard /></AdminOnly>} />
+            </Route>
           </Routes>
-        </Suspense>
         </RouteErrorBoundary>
       </HashRouter>
       <Analytics />
