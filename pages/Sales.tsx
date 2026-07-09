@@ -63,11 +63,12 @@ export const Sales: React.FC = () => {
         if (isFetching) return;
         setIsFetching(true);
         try {
-            const filters = { 
-                category: filterCategory || undefined, 
+            const filters = {
+                category: filterCategory || undefined,
                 // searchQuery: debouncedSearch || undefined, // Disabled for native pagination optimization
-                uf: selectedUf || undefined, 
-                city: selectedCity || undefined 
+                uf: selectedUf || undefined,
+                city: selectedCity || undefined,
+                excludeOwnerId: user?.id, // não mostra os próprios itens na vitrine
             };
             
             const cursor = isReset ? null : lastDoc;
@@ -90,6 +91,7 @@ export const Sales: React.FC = () => {
                 category: filterCategory || undefined,
                 uf: selectedUf || undefined,
                 city: selectedCity || undefined,
+                excludeOwnerId: user?.id,
             });
             setItems(results);
             setHasMore(false);

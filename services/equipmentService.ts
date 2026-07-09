@@ -164,6 +164,11 @@ export const equipmentService = {
       query = query.eq('category', filters.category);
     }
 
+    // Oculta os próprios itens do usuário na vitrine (aluguel/venda).
+    if (filters.excludeOwnerId) {
+      query = query.neq('owner_id', filters.excludeOwnerId);
+    }
+
     if (lastDoc) {
       query = query.gt('id', lastDoc);
     }
@@ -207,6 +212,11 @@ export const equipmentService = {
       .eq('status', 'SAFE')
       .order('id')
       .limit(120);
+
+    // Oculta os próprios itens do usuário na busca da vitrine.
+    if (filters.excludeOwnerId) {
+      query = query.neq('owner_id', filters.excludeOwnerId);
+    }
 
     const { data: rows } = await query;
     let items = (rows || []).map(mapFromDb);

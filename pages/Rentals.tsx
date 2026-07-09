@@ -65,11 +65,12 @@ export const Rentals: React.FC = () => {
         setIsFetching(true);
         
         try {
-            const filters = { 
-                category: filterCategory || undefined, 
+            const filters = {
+                category: filterCategory || undefined,
                 // searchQuery: debouncedSearch || undefined, // Disabled Client-Side Search for Performance/Native Pagination compliance
-                uf: selectedUf || undefined, 
-                city: selectedCity || undefined 
+                uf: selectedUf || undefined,
+                city: selectedCity || undefined,
+                excludeOwnerId: user?.id, // não mostra os próprios itens na vitrine
             };
             
             // If resetting, start from null. Otherwise use current lastDoc.
@@ -94,6 +95,7 @@ export const Rentals: React.FC = () => {
                 category: filterCategory || undefined,
                 uf: selectedUf || undefined,
                 city: selectedCity || undefined,
+                excludeOwnerId: user?.id,
             });
             setRentals(results);
             setHasMore(false);

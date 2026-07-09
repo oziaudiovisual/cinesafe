@@ -63,6 +63,11 @@ Detalhes que importam:
   (`newLastDoc`) é o último documento **da página já cortada**.
 - **Filtro de categoria server-side:** se `filters.category`, adiciona
   `where('category', '==', filters.category)` à query.
+- **Exclusão dos próprios itens (server-side):** se `filters.excludeOwnerId`,
+  adiciona `.neq('owner_id', excludeOwnerId)` — as páginas de aluguel/venda
+  passam `user?.id`, então a vitrine **nunca** mostra os anúncios do próprio
+  usuário logado (aplicado tanto na paginação quanto em `searchMarketplace`). A
+  vitrine pública da Landing chama com `filters` vazio, então lá nada é excluído.
 - **Filtro de localização "soft" (client-side):** o Firestore não faz busca
   parcial/`contains` eficiente sem serviço externo. Portanto, quando há
   `filters.uf` ou `filters.city`, o filtro roda **em memória sobre a página já

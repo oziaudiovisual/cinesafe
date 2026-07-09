@@ -221,6 +221,7 @@ export interface MarketplaceFilters {
   searchQuery?: string;
   uf?: string;
   city?: string;
+  excludeOwnerId?: string; // oculta os itens do próprio usuário na vitrine
 }
 
 export interface DetailedStats {
