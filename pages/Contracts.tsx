@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { contractService } from '../services/contractService';
-import { Contract, ContractStatus } from '../types';
+import { Contract, ContractStatus, InspectionPhoto } from '../types';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AdBanner } from '../components/AdBanner';
@@ -18,8 +18,44 @@ const STATUS_META: Record<ContractStatus, { label: string; cls: string }> = {
 
 const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const day = (s?: string) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
+const dayTime = (d?: string, t?: string) => (d ? `${day(d)}${t ? ` às ${t}` : ''}` : '—');
+const paymentTimingLabel = (c: Contract): string => {
+  switch (c.paymentTiming) {
+    case 'antecipado': return 'Antecipado';
+    case 'na_retirada': return 'Na retirada';
+    case 'na_devolucao': return 'Na devolução';
+    case 'data': return c.paymentDueDate ? `Até ${day(c.paymentDueDate)}` : 'Em data combinada';
+    default: return '—';
+  }
+};
 const paymentLabel = (s?: string) => (s === 'confirmed' ? 'Pagamento confirmado' : s === 'submitted' ? 'Comprovante enviado' : 'Pagamento pendente');
 const paymentCls = (s?: string) => (s === 'confirmed' ? 'text-green-400' : s === 'submitted' ? 'text-blue-400' : 'text-amber-400');
+
+// Lembrete de pagamento para o PAGADOR (locatário), derivado da combinação.
+// Client-side, sem notificação agendada. Retorna null quando não se aplica.
+const paymentReminder = (c: Contract, uid: string): { text: string; urgent: boolean } | null => {
+  if (c.type !== 'rental' || c.counterpartyId !== uid) return null;
+  if (c.paymentStatus === 'confirmed') return null;
+  if (!['active', 'completed'].includes(c.status)) return null;
+  const waiting = { text: 'Aguardando o dono confirmar o pagamento', urgent: false };
+  const today = new Date().toISOString().slice(0, 10);
+  switch (c.paymentTiming) {
+    case 'antecipado':
+    case 'na_retirada':
+      return c.paymentProofUrl ? waiting : { text: 'Pague e anexe o comprovante', urgent: true };
+    case 'na_devolucao':
+      if (c.status !== 'completed') return { text: 'Pagamento combinado para a devolução', urgent: false };
+      return c.paymentProofUrl ? waiting : { text: 'Devolvido — pague e anexe o comprovante', urgent: true };
+    case 'data':
+      if (!c.paymentDueDate) return null;
+      if (c.paymentProofUrl) return waiting;
+      if (c.paymentDueDate < today) return { text: `Pagamento atrasado (venceu ${day(c.paymentDueDate)})`, urgent: true };
+      if (c.paymentDueDate === today) return { text: 'Pagamento vence hoje', urgent: true };
+      return { text: `Pague até ${day(c.paymentDueDate)}`, urgent: false };
+    default:
+      return null;
+  }
+};
 const GRACE_MS = 48 * 60 * 60 * 1000; // prazo antes de poder emitir alerta público
 const overdueDays = (c: Contract) => {
   if (c.type !== 'rental' || c.status !== 'active' || !c.returnDate) return 0;
@@ -31,6 +67,7 @@ const graceOver = (c: Contract) => !!c.overdueNoticeAt && (Date.now() - new Date
 export const Contracts: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -44,6 +81,14 @@ export const Contracts: React.FC = () => {
     const unsub = contractService.subscribeUserContracts(user.id, setContracts);
     return () => unsub();
   }, [user]);
+
+  // Abre automaticamente o contrato quando chega de um link (ex.: cartão de
+  // proposta no chat -> navigate('/contracts', { state: { openContractId } })).
+  // O detalhe aparece assim que o contrato é carregado pela assinatura acima.
+  useEffect(() => {
+    const openId = (location.state as any)?.openContractId;
+    if (openId) setDetailId(openId);
+  }, [location.state]);
 
   if (!user) return null;
 
@@ -111,6 +156,11 @@ export const Contracts: React.FC = () => {
                 <span className={paymentCls(c.paymentStatus)}>{paymentLabel(c.paymentStatus)}</span>
               </p>
             )}
+            {(() => { const r = paymentReminder(c, user.id); return r ? (
+              <p className={`text-xs mt-1 flex items-center gap-1 font-bold ${r.urgent ? 'text-amber-400' : 'text-brand-400'}`}>
+                <Icons.Clock className="w-3 h-3" /> {r.text}
+              </p>
+            ) : null; })()}
             {overdueDays(c) > 0 && (
               <p className="text-xs mt-1 flex items-center gap-1 text-red-400 font-bold">
                 <Icons.AlertTriangle className="w-3 h-3" /> Atrasado há {overdueDays(c)} dia{overdueDays(c) > 1 ? 's' : ''}
@@ -184,18 +234,51 @@ export const Contracts: React.FC = () => {
         </div>
       )}
 
-      {detail && <ContractDetail contract={detail} currentUserId={user.id} onClose={() => setDetailId(null)} />}
+      {detail && <ContractDetail
+        contract={detail}
+        currentUserId={user.id}
+        onClose={() => setDetailId(null)}
+        onAccept={detail.status === 'proposed' && !iAmOwner(detail) ? () => { setDetailId(null); onAccept(detail); } : undefined}
+        onDecline={detail.status === 'proposed' && !iAmOwner(detail) ? () => { setDetailId(null); onDecline(detail); } : undefined}
+      />}
     </div>
   );
 };
 
-const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onClose: () => void }> = ({ contract: c, currentUserId, onClose }) => {
+const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onClose: () => void; onAccept?: () => void; onDecline?: () => void }> = ({ contract: c, currentUserId, onClose, onAccept, onDecline }) => {
   const st = STATUS_META[c.status];
   const isReceiver = c.ownerId === currentUserId;     // dono do item recebe o pagamento
   const isPayer = c.counterpartyId === currentUserId; // locatário/comprador paga
   const fileRef = useRef<HTMLInputElement>(null);
+  const pickupRef = useRef<HTMLInputElement>(null);
+  const returnRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState<'pickup' | 'return' | null>(null);
+  const [justAdded, setJustAdded] = useState<{ pickup: InspectionPhoto[]; return: InspectionPhoto[] }>({ pickup: [], return: [] });
   const canManagePayment = ['proposed', 'active', 'completed'].includes(c.status);
+  const showInspection = c.type === 'rental' && ['active', 'completed'].includes(c.status);
+
+  // Une as fotos do contrato com as recém-adicionadas (feedback imediato mesmo
+  // antes do realtime reconciliar), deduplicando por url.
+  const mergePhotos = (base: InspectionPhoto[] = [], added: InspectionPhoto[] = []) => {
+    const seen = new Set<string>();
+    return [...base, ...added].filter(p => (seen.has(p.url) ? false : seen.add(p.url)));
+  };
+  const pickupPhotos = mergePhotos(c.pickupPhotos, justAdded.pickup);
+  const returnPhotos = mergePhotos(c.returnPhotos, justAdded.return);
+
+  const handlePhotos = async (e: React.ChangeEvent<HTMLInputElement>, phase: 'pickup' | 'return') => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setPhotoUploading(phase);
+    for (const f of files) {
+      const photo = await contractService.addInspectionPhoto(c, f, phase, currentUserId);
+      if (photo) setJustAdded(prev => ({ ...prev, [phase]: [...prev[phase], photo] }));
+    }
+    setPhotoUploading(null);
+    if (e.target) e.target.value = '';
+  };
 
   const handleAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -223,11 +306,27 @@ const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onCl
             <Row label={c.type === 'sale' ? 'Vendedor' : 'Locador'} value={c.ownerName} />
             <Row label={c.type === 'sale' ? 'Comprador' : 'Locatário'} value={c.counterpartyName} />
             <Row label="Valor" value={brl(c.value)} />
-            {c.type === 'rental' && <Row label="Retirada" value={day(c.pickupDate)} />}
-            {c.type === 'rental' && <Row label="Devolução" value={day(c.returnDate)} />}
-            <Row label="Pagamento" value={paymentLabel(c.paymentStatus)} />
+            {c.type === 'rental' && <Row label="Retirada" value={dayTime(c.pickupDate, c.pickupTime)} />}
+            {c.type === 'rental' && <Row label="Devolução" value={dayTime(c.returnDate, c.returnTime)} />}
+            {c.type === 'rental' && c.paymentTiming && <Row label="Pagamento combinado" value={paymentTimingLabel(c)} />}
+            <Row label="Status do pagamento" value={paymentLabel(c.paymentStatus)} />
             <Row label="Criado em" value={new Date(c.createdAt).toLocaleString('pt-BR')} />
           </dl>
+
+          {c.pixKey && (
+            <div className="mt-4 flex items-center justify-between gap-3 bg-accent-primary/10 border border-accent-primary/20 rounded-xl p-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-brand-400">Chave PIX de {c.ownerName}</p>
+                <p className="text-white font-bold text-sm break-all">{c.pixKey}</p>
+              </div>
+              <button
+                onClick={() => { try { navigator.clipboard?.writeText(c.pixKey!); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ } }}
+                className="shrink-0 text-xs font-bold bg-accent-primary hover:bg-cyan-300 text-brand-950 px-3 py-2 rounded-lg flex items-center gap-1.5 print:hidden"
+              >
+                <Icons.FileText className="w-3.5 h-3.5" /> {copied ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
+          )}
 
           <p className="text-[11px] text-brand-500 mt-6 leading-relaxed">
             Este documento registra o acordo entre as partes dentro da plataforma Cine Safe. {c.type === 'sale' ? 'A aceitação transfere a propriedade do equipamento ao comprador no sistema.' : 'O locatário se compromete a devolver o equipamento na data acordada.'}
@@ -260,6 +359,41 @@ const ContractDetail: React.FC<{ contract: Contract; currentUserId: string; onCl
             </div>
             {isPayer && <p className="text-[11px] text-brand-500 mt-2">Anexe o comprovante quando pagar {c.ownerName} — pode ser antes da retirada ou depois, como vocês combinarem.</p>}
             {isReceiver && c.paymentStatus === 'submitted' && <p className="text-[11px] text-brand-500 mt-2">Confira o comprovante enviado e confirme o recebimento.</p>}
+          </div>
+        )}
+
+        {/* Vistoria: fotos de retirada e devolução (as duas partes registram) */}
+        {showInspection && (
+          <div className="mt-6 pt-4 border-t border-white/10 print:hidden space-y-4">
+            {(['pickup', 'return'] as const).map(phase => {
+              const photos = phase === 'pickup' ? pickupPhotos : returnPhotos;
+              const ref = phase === 'pickup' ? pickupRef : returnRef;
+              return (
+                <div key={phase}>
+                  <h3 className="text-sm font-bold text-white mb-1 flex items-center gap-2"><Icons.Camera className="w-4 h-4 text-accent-primary" /> Vistoria — {phase === 'pickup' ? 'Retirada' : 'Devolução'}</h3>
+                  <p className="text-[11px] text-brand-500 mb-2">Fotos do estado do equipamento {phase === 'pickup' ? 'na retirada' : 'na devolução'}. Qualquer uma das partes pode registrar.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {photos.map((p, i) => (
+                      <a key={p.url} href={p.url} target="_blank" rel="noopener noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-white/10 bg-black/40 shrink-0">
+                        <img src={p.url} alt={`Vistoria ${i + 1}`} className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                    <input ref={ref} type="file" accept="image/*" multiple className="hidden" onChange={e => handlePhotos(e, phase)} />
+                    <button onClick={() => ref.current?.click()} disabled={photoUploading === phase} className="w-16 h-16 rounded-lg border border-dashed border-white/20 text-brand-400 hover:text-white hover:border-white/40 flex flex-col items-center justify-center gap-0.5 shrink-0 disabled:opacity-50">
+                      {photoUploading === phase ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <><Icons.Camera className="w-4 h-4" /><span className="text-[9px] font-bold">Foto</span></>}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Aceitar / Recusar (também disponível dentro do detalhe) */}
+        {(onAccept || onDecline) && (
+          <div className="mt-6 flex gap-3 print:hidden">
+            {onAccept && <button onClick={onAccept} className="flex-1 bg-accent-primary hover:bg-cyan-300 text-brand-950 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Icons.CheckCircle className="w-4 h-4" /> Aceitar</button>}
+            {onDecline && <button onClick={onDecline} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold py-3 rounded-xl border border-red-500/20">Recusar</button>}
           </div>
         )}
 

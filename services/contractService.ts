@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Contract, EquipmentStatus, Equipment, User, ReturnAlert, Notification } from '../types';
+import { Contract, EquipmentStatus, Equipment, User, ReturnAlert, Notification, PaymentTiming, InspectionPhoto } from '../types';
 import { equipmentService } from './equipmentService';
 import { notificationService } from './notificationService';
 import { processImageForWebP } from '../utils/imageProcessor';
@@ -21,8 +21,15 @@ const mapContractFromDb = (row: any): Contract => ({
   equipmentImage: row.equipment_image,
   value: Number(row.value),
   pickupDate: row.pickup_date,
+  pickupTime: row.pickup_time,
   returnDate: row.return_date,
+  returnTime: row.return_time,
   chatId: row.chat_id,
+  paymentTiming: row.payment_timing,
+  paymentDueDate: row.payment_due_date,
+  pixKey: row.pix_key,
+  pickupPhotos: row.pickup_photos || [],
+  returnPhotos: row.return_photos || [],
   paymentStatus: row.payment_status,
   paymentProofUrl: row.payment_proof_url,
   paymentSubmittedBy: row.payment_submitted_by,
@@ -51,8 +58,15 @@ const mapContractToDb = (c: any): any => {
   if (c.equipmentImage !== undefined) obj.equipment_image = c.equipmentImage;
   if (c.value !== undefined) obj.value = c.value;
   if (c.pickupDate !== undefined) obj.pickup_date = c.pickupDate;
+  if (c.pickupTime !== undefined) obj.pickup_time = c.pickupTime;
   if (c.returnDate !== undefined) obj.return_date = c.returnDate;
+  if (c.returnTime !== undefined) obj.return_time = c.returnTime;
   if (c.chatId !== undefined) obj.chat_id = c.chatId;
+  if (c.paymentTiming !== undefined) obj.payment_timing = c.paymentTiming;
+  if (c.paymentDueDate !== undefined) obj.payment_due_date = c.paymentDueDate;
+  if (c.pixKey !== undefined) obj.pix_key = c.pixKey;
+  if (c.pickupPhotos !== undefined) obj.pickup_photos = c.pickupPhotos;
+  if (c.returnPhotos !== undefined) obj.return_photos = c.returnPhotos;
   if (c.paymentStatus !== undefined) obj.payment_status = c.paymentStatus;
   if (c.paymentProofUrl !== undefined) obj.payment_proof_url = c.paymentProofUrl;
   if (c.paymentSubmittedBy !== undefined) obj.payment_submitted_by = c.paymentSubmittedBy;
@@ -72,7 +86,12 @@ interface CreateContractInput {
   equipment: Equipment;
   value: number;
   pickupDate?: string;
+  pickupTime?: string;
   returnDate?: string;
+  returnTime?: string;
+  paymentTiming?: PaymentTiming;
+  paymentDueDate?: string;
+  pixKey?: string;
   chatId?: string;
 }
 
@@ -88,7 +107,13 @@ export const contractService = {
         counterpartyId: input.counterparty.id, counterpartyName: input.counterparty.name, counterpartyAvatar: input.counterparty.avatarUrl,
         equipmentId: input.equipment.id, equipmentName: input.equipment.name, equipmentImage: input.equipment.imageUrl,
         value: input.value,
-        ...(input.type === 'rental' ? { pickupDate: input.pickupDate, returnDate: input.returnDate } : {}),
+        ...(input.type === 'rental' ? {
+          pickupDate: input.pickupDate, pickupTime: input.pickupTime,
+          returnDate: input.returnDate, returnTime: input.returnTime,
+          paymentTiming: input.paymentTiming,
+          ...(input.paymentTiming === 'data' ? { paymentDueDate: input.paymentDueDate } : {}),
+        } : {}),
+        ...(input.pixKey ? { pixKey: input.pixKey } : {}),
         ...(input.chatId ? { chatId: input.chatId } : {}),
         createdAt: now, updatedAt: now,
       };
@@ -258,6 +283,37 @@ export const contractService = {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
+  },
+
+  // Vistoria: anexa uma foto do estado do equipamento na retirada/devolução.
+  // As duas partes podem registrar. Relê o array atual antes de anexar (evita
+  // perder fotos em uploads sequenciais). Retorna a foto criada ou null.
+  addInspectionPhoto: async (contract: Contract, file: File, phase: 'pickup' | 'return', uploaderId: string): Promise<InspectionPhoto | null> => {
+    try {
+      const isPdf = file.type === 'application/pdf';
+      const blob: Blob = isPdf ? file : await processImageForWebP(file);
+      const ext = isPdf ? 'pdf' : 'webp';
+      const path = `${contract.id}/${phase}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('contracts').upload(path, blob, {
+        contentType: isPdf ? 'application/pdf' : 'image/webp',
+      });
+      if (uploadError) { console.error('inspection photo upload error:', uploadError); return null; }
+      const { data: { publicUrl } } = supabase.storage.from('contracts').getPublicUrl(path);
+      const photo: InspectionPhoto = { url: publicUrl, by: uploaderId, at: new Date().toISOString() };
+
+      const col = phase === 'pickup' ? 'pickup_photos' : 'return_photos';
+      const { data: cur } = await supabase.from('contracts').select(col).eq('id', contract.id).single();
+      const existing: InspectionPhoto[] = (cur as any)?.[col] || [];
+      const { error } = await supabase.from('contracts').update({
+        [col]: [...existing, photo],
+        updated_at: new Date().toISOString(),
+      }).eq('id', contract.id);
+      if (error) { console.error('inspection photo save error:', error); return null; }
+      return photo;
+    } catch (e) {
+      console.error('addInspectionPhoto error:', e);
+      return null;
+    }
   },
 
   attachPaymentProof: async (contract: Contract, file: File, uploaderId: string): Promise<boolean> => {

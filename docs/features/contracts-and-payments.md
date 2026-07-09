@@ -60,14 +60,15 @@ Documento em `return_alerts/{contractId}` (id **igual** ao do contrato). Tipo `R
 
 Regras do formulário (`ContractModal.tsx`):
 
-- O `select` de equipamento lista **apenas itens do inventário do próprio dono com `status === SAFE`** (`ContractModal.tsx:29-31`). Itens roubados, perdidos ou já em transferência não aparecem.
-- Validação client-side em `handleSubmit` (`ContractModal.tsx:40-47`): equipamento selecionado, `value > 0`, e — para aluguel — `pickupDate` e `returnDate` obrigatórios com `returnDate >= pickupDate`.
-- Ao criar, `onCreated` envia uma mensagem-resumo no chat via `chatService.sendMessage` (`Chat.tsx:150`), diferente para aluguel e venda (`ContractModal.tsx:59-63`).
+- **Só o dono cria a proposta (por construção):** o `select` de equipamento lista **apenas itens do inventário de quem cria a proposta com `status === SAFE`**. Como o criador é sempre `owner`, ninguém consegue propor um item que não é seu — não há passo extra de autorização, a regra emerge da lista de itens.
+- **Campos do aluguel** (`type === 'rental'`): além de `value`, o formulário coleta **data + hora** de retirada (`pickupDate`/`pickupTime`) e de devolução (`returnDate`/`returnTime`); a **combinação de pagamento** (`paymentTiming`: `antecipado` | `na_retirada` | `na_devolucao` | `data`, com `paymentDueDate` quando for `data` — ex.: "devolve amanhã, paga semana que vem"); e a **chave PIX** do locador (`pixKey`), obrigatória no aluguel, para o locatário pagar. A chave PIX é lembrada em `localStorage` (`cinesafe_pix_<ownerId>`) e pré-preenchida na próxima proposta. Em venda, o PIX é opcional e não há horários/combinação.
+- Validação client-side em `handleSubmit`: equipamento selecionado, `value > 0`, e — para aluguel — datas **e horários** obrigatórios com retirada ≤ devolução, `paymentDueDate` quando `paymentTiming === 'data'`, e `pixKey` preenchida.
+- Ao criar, `onCreated(summary, contractId)` envia uma mensagem-resumo no chat via `chatService.sendMessage`, **prefixada com `[[c:<contractId>]]`**. No chat essa mensagem vira um **cartão "Proposta de contrato"** clicável (botão "Abrir contrato") que leva a `/contracts` e **abre o contrato específico** para a outra parte conferir. Ver [chat.md](./chat.md#fechar-negócio--contrato).
 
 `contractService.createContract` (`contractService.ts:26-66`):
 
-1. Monta o `Contract` com `status: 'proposed'` e `parties: [owner.id, counterparty.id]`. Datas só entram em aluguel; `chatId` só entra se fornecido.
-2. `setDoc(doc(db, 'contracts', id), clean)`.
+1. Monta o `Contract` com `status: 'proposed'` e `parties: [owner.id, counterparty.id]`. Datas/horas, `paymentTiming`/`paymentDueDate` só entram em aluguel; `pixKey` e `chatId` só entram se fornecidos.
+2. `supabase.from('contracts').insert(dbContract)` (as colunas novas exigem a migração `supabase/migrations/20260709_contracts_rental_fields.sql`).
 3. **Se `type === 'sale'`**, atualiza o equipamento para `status: TRANSFER_PENDING` e `pendingTransferTo: counterparty.id` (`contractService.ts:54-60`), via `equipmentService.updateEquipment`. Como `status !== SAFE`, o item **sai do marketplace** imediatamente (a leitura pública só expõe `SAFE` + à venda/aluguel — ver [../04-security.md](../04-security.md)). A posse **não** muda ainda.
 4. **Se `type === 'rental'`**, o equipamento **não** é tocado na criação.
 
@@ -137,7 +138,7 @@ A lista é assinada por `subscribeUserContracts` (`contractService.ts:68-76`): `
 
 ## 4. Aceite
 
-`contractService.acceptContract(contract)` (`contractService.ts:79-102`). Chamado pelo `counterparty` (botão "Aceitar" em "Aguardando você" — `Contracts.tsx:117`, `onAccept` em `60-67`).
+`contractService.acceptContract(contract)`. Chamado pelo `counterparty` a partir de **dois lugares**: o botão "Aceitar" no card da lista ("Aguardando você") e **também dentro do detalhe do contrato** (`ContractDetail` recebe `onAccept`/`onDecline` quando é uma proposta e o usuário é o `counterparty`; ao clicar, fecha o detalhe e abre o `ConfirmModal`). Assim a outra parte confere e aceita sem voltar para a lista.
 
 - **Venda:** chama `equipmentService.transferEquipmentOwnership(equipmentId, counterpartyId, value)` (`contractService.ts:82-84`). Se falhar, aborta (`return false`) **sem** mudar o status. Se ok, marca o contrato como `completed`. A transferência (`equipmentService.ts:233-281`) faz um `writeBatch` que:
   - troca `ownerId` para o comprador, volta `status` a `SAFE`, zera `pendingTransferTo` e **desliga** `isForRent`/`isForSale` (o item chega ao novo dono fora do marketplace — ele decide se re-anuncia);
@@ -199,7 +200,9 @@ O botão fica visível para o pagador enquanto `paymentStatus !== 'confirmed'`, 
 
 `contractService.confirmPayment(contractId)` (`contractService.ts:241-249`): grava `paymentStatus: 'confirmed'`. O botão "Confirmar recebimento" só aparece para o **recebedor** quando `paymentStatus === 'submitted'` (`Contracts.tsx:244-246`).
 
-Rótulos derivados (`Contracts.tsx:19`): sem status → "Pagamento pendente"; `submitted` → "Comprovante enviado"; `confirmed` → "Pagamento confirmado".
+Rótulos derivados (`Contracts.tsx`): sem status → "Pagamento pendente"; `submitted` → "Comprovante enviado"; `confirmed` → "Pagamento confirmado".
+
+**Lembrete de pagamento (client-side, sem notificação agendada).** `paymentReminder(c, uid)` (`Contracts.tsx`) mostra, **só para o pagador** e enquanto não confirmado, um aviso derivado da combinação (`paymentTiming`): `antecipado`/`na_retirada` → "Pague e anexe o comprovante"; `na_devolucao` → aparece só quando o contrato está `completed`; `data` → "Pague até DD/MM", "vence hoje" ou "atrasado" conforme `paymentDueDate`. Fica **âmbar** quando é ação urgente. Não há job/cron: é calculado quando a tela de Contratos é aberta.
 
 ```mermaid
 sequenceDiagram
@@ -212,6 +215,18 @@ sequenceDiagram
   R->>D: confirmPayment
   D-->>D: paymentStatus=confirmed
 ```
+
+---
+
+## 6.1 Vistoria (fotos de retirada e devolução)
+
+Registro fotográfico do estado do equipamento, para proteger as duas partes em caso de dano. Só em **aluguel** e quando o contrato está `active` ou `completed` (`showInspection`, `Contracts.tsx`).
+
+- **Duas galerias:** *Retirada* (`pickupPhotos`) e *Devolução* (`returnPhotos`), cada foto = `{ url, by, at }` (jsonb).
+- **Quem registra:** **qualquer uma das partes**, nos dois momentos — o locatário documenta "recebi assim" e o locador "entreguei/recebi assim". Cada foto guarda o `by` (uid de quem enviou).
+- **Captura:** input `type=file accept="image/*" multiple` (sem `capture`) — no **celular** o próprio SO oferece a escolha (**câmera ou biblioteca de fotos**); no **desktop** abre o **seletor de arquivos**. Aceita várias fotos por vez.
+- **Serviço:** `contractService.addInspectionPhoto(contract, file, phase, uploaderId)` — processa p/ WebP (`utils/imageProcessor`), sobe em `contracts/{id}/{phase}_{ts}.webp` (mesmo bucket do comprovante) e **re-lê o array atual** antes de anexar (evita perder fotos em uploads sequenciais). Retorna a `InspectionPhoto` criada.
+- **UI otimista:** `ContractDetail` mescla `pickupPhotos`/`returnPhotos` do contrato com as recém-enviadas (`justAdded`, dedup por `url`), então a foto aparece na hora mesmo antes do realtime reconciliar.
 
 ---
 

@@ -330,9 +330,16 @@ Ciclo de aluguel/venda entre **duas partes**. O dono do equipamento cria a propo
 | `equipmentImage?` | `string` | Imagem do item (snapshot). |
 | `value` | `number` | Aluguel: valor total do período; venda: preço. |
 | `pickupDate?` | `string` | Aluguel: dia de retirada (ISO date). |
+| `pickupTime?` | `string` | Aluguel: hora de retirada (`HH:MM`). |
 | `returnDate?` | `string` | Aluguel: dia de devolução (ISO date). |
+| `returnTime?` | `string` | Aluguel: hora de devolução (`HH:MM`). |
+| `paymentTiming?` | `PaymentTiming` | Aluguel: `'antecipado' \| 'na_retirada' \| 'na_devolucao' \| 'data'`. |
+| `paymentDueDate?` | `string` | Aluguel: data-limite do pagamento (ISO date), quando `paymentTiming === 'data'`. |
+| `pixKey?` | `string` | Chave PIX do recebedor (locador/vendedor) para o pagamento. |
+| `pickupPhotos?` | `InspectionPhoto[]` | Vistoria na retirada: `[{url,by,at}]` (jsonb). As duas partes podem registrar. |
+| `returnPhotos?` | `InspectionPhoto[]` | Vistoria na devolução: `[{url,by,at}]` (jsonb). As duas partes podem registrar. |
 | `chatId?` | `string` | Liga o contrato à conversa. |
-| `paymentStatus?` | `'submitted' \| 'confirmed'` | Sem valor = pendente. |
+| `paymentStatus?` | `'submitted' \| 'confirmed'` | Sem valor = pendente (só sai de pendente quando o pagador anexa o comprovante). |
 | `paymentProofUrl?` | `string` | Comprovante (imagem/PDF) no Storage. |
 | `paymentSubmittedBy?` | `string` | Quem anexou o comprovante. |
 | `paymentAt?` | `string` | ISO do envio do comprovante. |

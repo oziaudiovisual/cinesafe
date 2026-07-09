@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { equipmentService } from '../services/equipmentService';
 import { contractService } from '../services/contractService';
-import { Equipment, EquipmentStatus, User, ContractType } from '../types';
+import { Equipment, EquipmentStatus, User, ContractType, PaymentTiming } from '../types';
 import { Icons } from '../components/Icons';
 import { CurrencyInput } from '../components/CurrencyInput';
 
@@ -12,7 +12,7 @@ interface ContractModalProps {
   owner: User;
   counterparty: { id: string; name: string; avatarUrl: string };
   chatId?: string;
-  onCreated?: (summary: string) => void;
+  onCreated?: (summary: string, contractId: string) => void;
 }
 
 export const ContractModal: React.FC<ContractModalProps> = ({ isOpen, onClose, owner, counterparty, chatId, onCreated }) => {
@@ -21,9 +21,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({ isOpen, onClose, o
   const [type, setType] = useState<ContractType>('rental');
   const [value, setValue] = useState<number>(0);
   const [pickupDate, setPickupDate] = useState('');
+  const [pickupTime, setPickupTime] = useState('');
   const [returnDate, setReturnDate] = useState('');
+  const [returnTime, setReturnTime] = useState('');
+  const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>('antecipado');
+  const [paymentDueDate, setPaymentDueDate] = useState('');
+  const [pixKey, setPixKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const PIX_STORAGE_KEY = `cinesafe_pix_${owner.id}`;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -31,7 +38,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({ isOpen, onClose, o
       setItems(list.filter(e => e.status === EquipmentStatus.SAFE));
     });
     // reset
-    setEquipmentId(''); setType('rental'); setValue(0); setPickupDate(''); setReturnDate(''); setError('');
+    setEquipmentId(''); setType('rental'); setValue(0);
+    setPickupDate(''); setPickupTime(''); setReturnDate(''); setReturnTime('');
+    setPaymentTiming('antecipado'); setPaymentDueDate('');
+    setError('');
+    // Prefill da chave PIX (lembrada neste dispositivo p/ não redigitar toda vez).
+    let savedPix = '';
+    try { savedPix = localStorage.getItem(PIX_STORAGE_KEY) || ''; } catch { /* ignore */ }
+    setPixKey(savedPix);
   }, [isOpen, owner.id]);
 
   if (!isOpen) return null;
@@ -44,23 +58,33 @@ export const ContractModal: React.FC<ContractModalProps> = ({ isOpen, onClose, o
     if (!value || value <= 0) { setError('Informe um valor maior que zero.'); return; }
     if (type === 'rental') {
       if (!pickupDate || !returnDate) { setError('Informe as datas de retirada e devolução.'); return; }
-      if (new Date(returnDate) < new Date(pickupDate)) { setError('A devolução não pode ser antes da retirada.'); return; }
+      if (!pickupTime || !returnTime) { setError('Informe os horários de retirada e devolução.'); return; }
+      if (new Date(`${returnDate}T${returnTime}`) < new Date(`${pickupDate}T${pickupTime}`)) { setError('A devolução não pode ser antes da retirada.'); return; }
+      if (paymentTiming === 'data' && !paymentDueDate) { setError('Informe a data combinada para o pagamento.'); return; }
+      if (!pixKey.trim()) { setError('Informe sua chave PIX para o locatário poder pagar.'); return; }
     }
     setSaving(true);
     const id = await contractService.createContract({
       type, owner, counterparty, equipment: selected, value,
       pickupDate: type === 'rental' ? pickupDate : undefined,
+      pickupTime: type === 'rental' ? pickupTime : undefined,
       returnDate: type === 'rental' ? returnDate : undefined,
+      returnTime: type === 'rental' ? returnTime : undefined,
+      paymentTiming: type === 'rental' ? paymentTiming : undefined,
+      paymentDueDate: type === 'rental' && paymentTiming === 'data' ? paymentDueDate : undefined,
+      pixKey: pixKey.trim() || undefined,
       chatId,
     });
     setSaving(false);
     if (!id) { setError('Não foi possível criar o contrato. Tente novamente.'); return; }
+    try { if (pixKey.trim()) localStorage.setItem(PIX_STORAGE_KEY, pixKey.trim()); } catch { /* ignore */ }
     if (onCreated) {
       const money = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       onCreated(
         type === 'rental'
-          ? `📄 Proposta de ALUGUEL de "${selected.name}" — ${money} • retirada ${new Date(pickupDate).toLocaleDateString('pt-BR')}, devolução ${new Date(returnDate).toLocaleDateString('pt-BR')}. Veja em Contratos.`
-          : `📄 Proposta de VENDA de "${selected.name}" — ${money}. Aceite em Contratos para receber o equipamento.`
+          ? `📄 Proposta de ALUGUEL de "${selected.name}" — ${money} • retirada ${new Date(pickupDate).toLocaleDateString('pt-BR')}, devolução ${new Date(returnDate).toLocaleDateString('pt-BR')}.`
+          : `📄 Proposta de VENDA de "${selected.name}" — ${money}.`,
+        id
       );
     }
     onClose();
@@ -102,19 +126,52 @@ export const ContractModal: React.FC<ContractModalProps> = ({ isOpen, onClose, o
             <CurrencyInput className="w-full glass-input rounded-xl p-3" placeholder="0,00" value={value} onValueChange={setValue} />
           </div>
 
-          {/* Datas (aluguel) */}
+          {/* Datas e horários (aluguel) */}
           {type === 'rental' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Retirada</label>
-                <input type="date" className="w-full glass-input rounded-xl p-3" value={pickupDate} onChange={e => setPickupDate(e.target.value)} />
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Retirada</label>
+                  <input type="date" className="w-full glass-input rounded-xl p-3 mb-2" value={pickupDate} onChange={e => setPickupDate(e.target.value)} />
+                  <input type="time" className="w-full glass-input rounded-xl p-3" value={pickupTime} onChange={e => setPickupTime(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Devolução</label>
+                  <input type="date" className="w-full glass-input rounded-xl p-3 mb-2" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
+                  <input type="time" className="w-full glass-input rounded-xl p-3" value={returnTime} onChange={e => setReturnTime(e.target.value)} />
+                </div>
               </div>
+
+              {/* Combinação de pagamento */}
               <div>
-                <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Devolução</label>
-                <input type="date" className="w-full glass-input rounded-xl p-3" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
+                <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Quando o locatário paga</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { k: 'antecipado', label: 'Antecipado' },
+                    { k: 'na_retirada', label: 'Na retirada' },
+                    { k: 'na_devolucao', label: 'Na devolução' },
+                    { k: 'data', label: 'Em data combinada' },
+                  ] as { k: PaymentTiming; label: string }[]).map(opt => (
+                    <button key={opt.k} type="button" onClick={() => setPaymentTiming(opt.k)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${paymentTiming === opt.k ? 'bg-accent-primary text-brand-950 border-accent-primary' : 'bg-brand-900 text-brand-400 border-white/10'}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {paymentTiming === 'data' && (
+                  <input type="date" className="w-full glass-input rounded-xl p-3 mt-2" value={paymentDueDate} onChange={e => setPaymentDueDate(e.target.value)} />
+                )}
+                <p className="text-[11px] text-brand-500 mt-1.5">Ex.: devolver amanhã mas pagar só semana que vem → escolha "Em data combinada".</p>
               </div>
-            </div>
+            </>
           )}
+
+          {/* Chave PIX do recebedor */}
+          <div>
+            <label className="block text-xs font-bold text-brand-400 uppercase mb-2">Sua chave PIX {type === 'sale' && <span className="lowercase font-medium text-brand-500">(opcional)</span>}</label>
+            <input type="text" className="w-full glass-input rounded-xl p-3" placeholder="CPF, e-mail, telefone ou chave aleatória" value={pixKey} onChange={e => setPixKey(e.target.value)} />
+            <p className="text-[11px] text-brand-500 mt-1.5">{type === 'rental' ? 'O locatário usa essa chave para te pagar via PIX.' : 'Opcional — para o comprador te pagar via PIX.'}</p>
+          </div>
 
           {error && <p className="text-red-400 text-xs font-bold flex items-center gap-2"><Icons.AlertTriangle className="w-3 h-3" /> {error}</p>}
 

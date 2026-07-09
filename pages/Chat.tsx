@@ -40,6 +40,16 @@ const Countdown = ({ targetDate }: { targetDate: string }) => {
 
 const CINESAFE_ID = '__cinesafe_system__';
 
+// Mensagens de proposta de contrato carregam o marcador [[c:<id>]] no início.
+// Detecta o formato novo (com id) ou o legado (começa com "📄 Proposta") para
+// renderizar um cartão clicável que abre o contrato específico em /contracts.
+const parseProposal = (text: string): { contractId: string | null; body: string } | null => {
+  const m = text.match(/^\[\[c:([^\]]+)\]\]\s*/);
+  if (m) return { contractId: m[1], body: text.slice(m[0].length) };
+  if (text.startsWith('📄 Proposta')) return { contractId: null, body: text };
+  return null;
+};
+
 export const Chat: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -405,6 +415,25 @@ export const Chat: React.FC = () => {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
                 {messages.map(m => {
                   const mine = m.senderId === user.id;
+                  const prop = parseProposal(m.text);
+                  if (prop) {
+                    return (
+                      <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                        <button
+                          onClick={() => navigate('/contracts', prop.contractId ? { state: { openContractId: prop.contractId } } : {})}
+                          className={`max-w-[80%] text-left px-4 py-3 rounded-2xl border transition-colors ${mine ? 'bg-accent-primary/15 border-accent-primary/30 rounded-br-sm hover:bg-accent-primary/25' : 'bg-brand-800 border-white/10 rounded-bl-sm hover:bg-brand-700'}`}
+                        >
+                          <div className="flex items-center gap-2 mb-1.5 text-accent-primary">
+                            <Icons.FileText className="w-4 h-4" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Proposta de contrato</span>
+                          </div>
+                          <p className="text-sm text-brand-100 whitespace-pre-wrap break-words">{prop.body}</p>
+                          <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-accent-primary">Abrir contrato <Icons.ArrowRight className="w-3.5 h-3.5" /></span>
+                          <p className="text-[10px] text-brand-500 mt-1.5">{new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                        </button>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${mine ? 'bg-accent-primary text-brand-950 rounded-br-sm' : 'bg-brand-800 text-brand-100 rounded-bl-sm border border-white/5'}`}>
@@ -435,7 +464,7 @@ export const Chat: React.FC = () => {
           owner={user}
           counterparty={{ id: otherOf(selectedChat).uid, name: otherOf(selectedChat).name, avatarUrl: otherOf(selectedChat).avatarUrl }}
           chatId={selectedChat.id}
-          onCreated={(summary) => { chatService.sendMessage(selectedChat.id, user.id, summary); }}
+          onCreated={(summary, contractId) => { chatService.sendMessage(selectedChat.id, user.id, `[[c:${contractId}]] ${summary}`); }}
         />
       )}
     </div>

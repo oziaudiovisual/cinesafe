@@ -255,20 +255,24 @@ Renderização:
 
 No cabeçalho da thread, o botão "Fechar negócio" abre o `ContractModal` passando
 `owner={user}`, `counterparty` (o outro participante) e `chatId={selectedChat.id}`.
-Ao criar o contrato, o callback `onCreated(summary)` envia esse resumo como mensagem
-na própria conversa:
+Ao criar o contrato, o callback `onCreated(summary, contractId)` envia o resumo como
+mensagem na própria conversa, **prefixado com o marcador `[[c:<contractId>]]`**:
 
 ```tsx
-// pages/Chat.tsx:143-151 (resumo)
+// pages/Chat.tsx (resumo)
 <ContractModal
-  isOpen={contractOpen}
-  onClose={() => setContractOpen(false)}
-  owner={user}
-  counterparty={{ id: otherOf(selectedChat).uid, name, avatarUrl }}
-  chatId={selectedChat.id}
-  onCreated={(summary) => { chatService.sendMessage(selectedChat.id, user.id, summary); }}
+  ...
+  onCreated={(summary, contractId) => { chatService.sendMessage(selectedChat.id, user.id, `[[c:${contractId}]] ${summary}`); }}
 />
 ```
+
+**Cartão de proposta clicável.** Na renderização das mensagens, `parseProposal(text)`
+detecta o marcador `[[c:<id>]]` (ou o formato legado que começa com `📄 Proposta`) e,
+em vez de um balão comum, mostra um **cartão "Proposta de contrato"** com o botão
+**"Abrir contrato"**. O clique faz `navigate('/contracts', { state: { openContractId: id } })`,
+e a tela de Contratos **abre automaticamente aquele contrato** (`Contracts.tsx` lê
+`location.state.openContractId` e seta `detailId`) — a outra parte confere a proposta
+com um clique. Mensagens legadas (sem id) caem no botão que só navega para `/contracts`.
 
 ## Pontos de entrada
 

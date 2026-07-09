@@ -145,6 +145,16 @@ export interface RentalListing {
 
 export type ContractType = 'rental' | 'sale';
 export type ContractStatus = 'proposed' | 'active' | 'completed' | 'declined' | 'cancelled';
+// Quando o locatário/comprador deve pagar. 'data' usa `paymentDueDate`.
+export type PaymentTiming = 'antecipado' | 'na_retirada' | 'na_devolucao' | 'data';
+
+// Foto de vistoria (estado do equipamento na retirada/devolução). Qualquer uma
+// das partes pode registrar; `by` = uid de quem enviou, `at` = ISO.
+export interface InspectionPhoto {
+  url: string;
+  by: string;
+  at: string;
+}
 
 export interface Contract {
   id: string;
@@ -162,8 +172,17 @@ export interface Contract {
   equipmentImage?: string;
   value: number;        // aluguel: valor total do período; venda: preço
   pickupDate?: string;  // aluguel: dia da retirada (ISO date)
+  pickupTime?: string;  // aluguel: hora da retirada (HH:MM)
   returnDate?: string;  // aluguel: dia da devolução (ISO date)
+  returnTime?: string;  // aluguel: hora da devolução (HH:MM)
   chatId?: string;      // liga o contrato à conversa
+  // Combinação de pagamento (aluguel): quando pagar + chave PIX do recebedor.
+  paymentTiming?: PaymentTiming; // antecipado | na_retirada | na_devolucao | data
+  paymentDueDate?: string;       // ISO date — usado quando paymentTiming === 'data'
+  pixKey?: string;               // chave PIX do locador/vendedor para receber o pagamento
+  // Vistoria: fotos do estado do equipamento (as duas partes podem registrar).
+  pickupPhotos?: InspectionPhoto[]; // na retirada
+  returnPhotos?: InspectionPhoto[]; // na devolução
   // Pagamento (flexível: pode ser anexado antes ou depois). Sem status = pendente.
   paymentStatus?: 'submitted' | 'confirmed';
   paymentProofUrl?: string;   // comprovante (imagem/PDF) no Storage
