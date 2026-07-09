@@ -60,3 +60,15 @@ export const numberToCurrencyMask = (value?: number | null): string => {
     maximumFractionDigits: 2,
   });
 };
+
+// Interpreta um preço de anúncio (string livre — pode ser legada tipo "16900",
+// mascarada "16.900,00" ou com "R$" digitado) como número de reais e devolve
+// formatado em BRL: "R$ 16.900,00". Vazio se não houver número.
+export const formatAdPrice = (raw?: string): string => {
+  if (!raw) return '';
+  // Mantém apenas dígitos e vírgula; vírgula vira separador decimal.
+  const cleaned = raw.replace(/[^\d,]/g, '').replace(',', '.');
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return '';
+  return formatCurrency(num);
+};

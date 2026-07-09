@@ -2,6 +2,7 @@ import React, { useState, useEffect, memo } from 'react';
 import { adService } from '../services/adService';
 import { Ad } from '../types';
 import { Icons } from './Icons';
+import { formatAdPrice } from '../utils/formatters';
 
 interface AdBannerProps {
   ad: Ad;
@@ -52,8 +53,8 @@ const AdBannerComponent: React.FC<AdBannerProps> = ({ ad }) => {
 
         {(ad.priceOld || ad.priceNew) && (
           <div className="flex items-baseline gap-2 mb-4">
-            {ad.priceOld && <p className="text-gray-400 text-sm line-through">R$ {ad.priceOld.replace(/R\$\s*/i, '')}</p>}
-            {ad.priceNew && <p className="text-white text-2xl font-bold">R$ {ad.priceNew.replace(/R\$\s*/i, '')}</p>}
+            {ad.priceOld && <p className="text-gray-400 text-sm line-through">{formatAdPrice(ad.priceOld)}</p>}
+            {ad.priceNew && <p className="text-white text-2xl font-bold">{formatAdPrice(ad.priceNew)}</p>}
           </div>
         )}
 

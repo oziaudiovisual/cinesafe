@@ -342,10 +342,11 @@ Todo campo em que o usuário **digita** um preço/valor usa a mesma máscara: **
 maskCurrencyBRL('1690000')   // "16.900,00"  (texto livre → mascarado, sem símbolo)
 parseCurrencyBRL('16.900,00')// 16900         (mascarado → número de reais)
 numberToCurrencyMask(16900)  // "16.900,00"   (número salvo → texto do input; '' se ≤ 0)
+formatAdPrice('16900')       // "R$ 16.900,00" (preço de anúncio legado/mascarado → BRL)
 ```
 
 - **Campos numéricos** (valor estimado, diária, venda, valor de transação, valor de contrato) usam o componente **`components/CurrencyInput.tsx`** — controlado por um `number` (reais) via `value`/`onValueChange`. Substitui os antigos `<input type="number">`.
-- **Campos string** (preço antigo/novo do anúncio em `AdminDashboard`) aplicam `maskCurrencyBRL` inline no `onChange`, guardando a string mascarada; o `AdBanner` prefixa `R$ ` na exibição.
+- **Campos string** (preço antigo/novo do anúncio em `AdminDashboard`) aplicam `maskCurrencyBRL` inline no `onChange`, guardando a string mascarada; o `AdBanner` **exibe** via `formatAdPrice`, que normaliza qualquer valor (legado `"16900"`, mascarado `"16.900,00"` ou com `R$` digitado) para `R$ 16.900,00` — sempre com milhar e centavos.
 
 Pontos de entrada cobertos: `pages/Inventory.tsx` (×4), `components/ContractModal.tsx` (×1), `pages/AdminDashboard.tsx` (×2). Catálogo do componente em `reference/components.md`.
 
