@@ -256,17 +256,28 @@ Ver o fluxo completo em [`network-and-transfers.md`](./features/network-and-tran
 
 ### 3.4 `notifications` — privadas ao destinatário
 
-```
-allow read:            if isSignedIn() && resource.data.toUserId == request.auth.uid;
-allow create:          if isSignedIn() && request.resource.data.fromUserId == request.auth.uid;
-allow update, delete:  if isSignedIn() && resource.data.toUserId == request.auth.uid;
+> **Supabase/Postgres:** este app foi migrado de Firestore para Supabase; a
+> tabela `public.notifications` usa **RLS** (não `firestore.rules`). SQL fonte:
+> [`supabase/migrations/20260709_notifications_rls_realtime.sql`](../supabase/migrations/20260709_notifications_rls_realtime.sql).
+
+```sql
+-- select / update / delete: só o destinatário
+for select using (to_user_id = auth.uid());
+for update using (to_user_id = auth.uid()) with check (to_user_id = auth.uid());
+for delete using (to_user_id = auth.uid());
+-- insert: remetente assinado
+for insert with check (from_user_id = auth.uid());
 ```
 
-- **Só o destinatário** (`toUserId`) lê, atualiza e apaga.
+- **Só o destinatário** (`to_user_id`) lê, atualiza e apaga.
 - Qualquer autenticado **cria**, desde que **assine como remetente**
-  (`fromUserId == uid`) — impede forjar notificação em nome de terceiro.
-- A auto-exclusão por `expiresAt` acontece no cliente durante o `subscribe`
-  (faxina), não nas rules. Ver [`notifications.md`](./features/notifications.md).
+  (`from_user_id = auth.uid()`) — impede forjar notificação em nome de terceiro.
+- **Importante:** com a RLS ligada e a policy de `insert` **ausente**, todo envio
+  do cliente é negado por _default deny_ — foi essa a causa de "enviei interesse
+  e o dono não recebeu". A migração acima (re)cria a policy `insert`.
+- Inserts feitos por funções `SECURITY DEFINER` de sorteio **ignoram** a RLS.
+- A auto-exclusão por `expires_at` acontece no cliente durante o `subscribe`
+  (faxina), não na RLS. Ver [`notifications.md`](./features/notifications.md).
 
 ### 3.5 `theft_history` — imutável
 

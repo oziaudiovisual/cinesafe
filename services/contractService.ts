@@ -197,7 +197,10 @@ export const contractService = {
         type: 'RENTAL_OVERDUE', createdAt: new Date().toISOString(), read: false,
         message: `O aluguel de "${contract.equipmentName}" venceu em ${contract.returnDate ? new Date(contract.returnDate).toLocaleDateString('pt-BR') : ''}. Por favor, devolva o equipamento ou combine a devolução para evitar um alerta público.`,
       };
-      await notificationService.createNotification(notif);
+      // Se o aviso não chegou ao locatário, não inicia o prazo de 48h (o clock
+      // do alerta público só faz sentido a partir de um aviso efetivamente enviado).
+      const sent = await notificationService.createNotification(notif);
+      if (!sent) return false;
       await supabase.from('contracts').update({ overdue_notice_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', contract.id);
       return true;
     } catch (e) {

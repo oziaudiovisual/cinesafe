@@ -63,7 +63,11 @@ export const Network: React.FC = () => {
             isDestructive: false,
             action: async () => {
                 const notification: Notification = { id: crypto.randomUUID(), toUserId: targetUser.id, fromUserId: user.id, fromUserName: user.name, fromUserPhone: user.contactPhone, fromUserAvatar: user.avatarUrl, fromUserReputation: user.reputationPoints, fromUserConnectionsCount: user.connections?.length || 0, type: 'CONNECTION_REQUEST', createdAt: new Date().toISOString(), read: false, message: `${user.name} quer te adicionar à Rede de Confiança dele.`, actionPayload: { requesterId: user.id } };
-                await notificationService.createNotification(notification);
+                const sent = await notificationService.createNotification(notification);
+                if (!sent) {
+                    setModalConfig({ title: "Não foi possível enviar", message: `Houve um erro ao enviar o convite para ${targetUser.name}. Tente novamente em instantes.`, confirmLabel: "Fechar", isDestructive: false, action: async () => setModalOpen(false) });
+                    return;
+                }
                 setModalConfig({ title: "Convite Enviado", message: `Sua solicitação foi enviada para ${targetUser.name}.`, confirmLabel: "OK", isDestructive: false, action: async () => setModalOpen(false) });
             }
         });

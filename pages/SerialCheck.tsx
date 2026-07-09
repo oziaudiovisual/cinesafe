@@ -53,8 +53,12 @@ export const SerialCheck: React.FC = () => {
         confirmLabel: "Enviar Alerta",
         action: async () => {
              const notification: Notification = { id: crypto.randomUUID(), toUserId: foundItem.ownerId, fromUserId: user.id, fromUserName: user.name, fromUserPhone: user.contactPhone, fromUserAvatar: user.avatarUrl, fromUserReputation: user.reputationPoints, fromUserConnectionsCount: user.connections?.length || 0, itemId: foundItem.id, itemName: foundItem.name, itemImage: foundItem.imageUrl, type: 'STOLEN_FOUND', createdAt: new Date().toISOString(), read: false, message: `URGENTE: Seu item roubado ${foundItem.name} foi localizado!` };
-            await notificationService.createNotification(notification);
-            setModalOpen(false);
+            const sent = await notificationService.createNotification(notification);
+            if (!sent) {
+                setModalConfig(prev => ({ ...prev, title: "Não foi possível enviar", message: "Houve um erro ao enviar o alerta ao proprietário. Tente novamente em instantes.", confirmLabel: "Fechar", action: async () => setModalOpen(false) }));
+                return;
+            }
+            setModalConfig(prev => ({ ...prev, title: "Alerta enviado!", message: `${foundItem.ownerProfile?.name || 'O proprietário'} foi avisado de que o item foi localizado.`, confirmLabel: "OK", action: async () => setModalOpen(false) }));
         }
     });
     setModalOpen(true);

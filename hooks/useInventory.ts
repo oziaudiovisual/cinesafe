@@ -177,17 +177,26 @@ export const useInventory = () => {
         if (!user || !itemToTransfer || !selectedConnectionId) return;
         setModalProcessing(true);
         const targetUser = connections.find(c => c.id === selectedConnectionId);
-        if (!targetUser) return;
-        
+        if (!targetUser) { setModalProcessing(false); return; }
+
         const value = transferType === 'valued' ? transactionValue : 0;
         const message = value > 0 ? `${user.name} iniciou a transferência de ${itemToTransfer.name} por ${value.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}.` : `${user.name} iniciou a transferência de ${itemToTransfer.name}.`;
-        
+
         const notification: Notification = { id: crypto.randomUUID(), toUserId: targetUser.id, fromUserId: user.id, fromUserName: user.name, fromUserAvatar: user.avatarUrl, fromUserReputation: user.reputationPoints, itemId: itemToTransfer.id, itemName: itemToTransfer.name, itemImage: itemToTransfer.imageUrl, type: 'ITEM_TRANSFER', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), read: false, message: message, actionPayload: { equipmentId: itemToTransfer.id, transactionValue: value } };
-        
-        await notificationService.createNotification(notification);
+
+        const sent = await notificationService.createNotification(notification);
+        if (!sent) {
+            // Não coloca o item em TRANSFER_PENDING se o destinatário não foi avisado —
+            // senão o item ficaria travado sem que a outra parte soubesse.
+            setModalProcessing(false);
+            setTransferModalOpen(false); setItemToTransfer(null); setSelectedConnectionId(''); setTransferType('free'); setTransactionValue(0);
+            setModalConfig({ title: "Não foi possível transferir", message: "Houve um erro ao avisar o destinatário. O item não foi alterado. Tente novamente em instantes.", confirmLabel: "Fechar", isDestructive: true, action: async () => setModalOpen(false) });
+            setModalOpen(true);
+            return;
+        }
         await equipmentService.updateEquipment({ ...itemToTransfer, status: EquipmentStatus.TRANSFER_PENDING, pendingTransferTo: selectedConnectionId, isForRent: false, isForSale: false });
         await refreshData();
-        
+
         setTransferModalOpen(false); setItemToTransfer(null); setSelectedConnectionId(''); setTransferType('free'); setTransactionValue(0); setModalProcessing(false);
         setModalConfig({ title: "Solicitação Enviada", message: "Aguardando aceite do destinatário (24h).", confirmLabel: "OK", isDestructive: false, action: async () => setModalOpen(false) });
         setModalOpen(true);

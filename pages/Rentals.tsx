@@ -114,9 +114,14 @@ export const Rentals: React.FC = () => {
             confirmLabel: "Enviar Notificação",
             action: async () => {
                 const notification: Notification = { id: crypto.randomUUID(), toUserId: item.ownerId, fromUserId: user.id, fromUserName: user.name, fromUserPhone: user.contactPhone, fromUserAvatar: user.avatarUrl, fromUserReputation: user.reputationPoints, fromUserConnectionsCount: user.connections?.length || 0, itemId: item.id, itemName: item.name, itemImage: item.imageUrl, type: 'RENTAL_INTEREST', createdAt: new Date().toISOString(), read: false, message: `Tenho interesse em alugar seu item ${item.name}.` };
-                await notificationService.createNotification(notification);
+                const sent = await notificationService.createNotification(notification);
+                if (!sent) {
+                    // Não gasta a cota mensal quando o aviso não chegou ao dono.
+                    setModalConfig(prev => ({ ...prev, title: 'Não foi possível enviar', message: 'Houve um erro ao avisar o proprietário. Verifique sua conexão e tente novamente em instantes.', confirmLabel: 'Fechar', action: async () => setModalOpen(false) }));
+                    return;
+                }
                 await userService.incrementUsage(user.id, 'contact');
-                setModalOpen(false);
+                setModalConfig(prev => ({ ...prev, title: 'Interesse enviado!', message: `Avisamos ${item.ownerProfile?.name || 'o proprietário'}. Assim que ele responder, a conversa aparece em Mensagens.`, confirmLabel: 'OK', action: async () => setModalOpen(false) }));
             }
         });
         setModalOpen(true);

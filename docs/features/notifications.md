@@ -1,15 +1,17 @@
 # Notificações
 
-> Central privada de eventos por usuário, em tempo real via `onSnapshot`, com faxina automática de notificações expiradas e contadores vitalícios de interesse recebido.
+> Central privada de eventos por usuário, em tempo real via **Supabase Realtime** (`postgres_changes`), com faxina automática de notificações expiradas e contadores vitalícios de interesse recebido.
 
-A feature de Notificações é o canal de sinalização interno do Cine Safe: interesse de aluguel/venda, alerta de item roubado localizado, convites de rede, aceite de conexão, transferência de posse e aviso de aluguel atrasado. Todas as notificações são **privadas ao destinatário** (`toUserId`) e chegam **sem recarregar a página**. Não há push nativo nem Cloud Functions — tudo é cliente + Firestore.
+A feature de Notificações é o canal de sinalização interno do Cine Safe: interesse de aluguel/venda, alerta de item roubado localizado, convites de rede, aceite de conexão, transferência de posse e aviso de aluguel atrasado. Todas as notificações são **privadas ao destinatário** (`toUserId`) e chegam **sem recarregar a página**. Não há push nativo nem backend próprio — tudo é cliente + **Supabase** (PostgREST + Realtime), com a **RLS do Postgres** como fronteira de segurança.
+
+> **Stack:** este app foi migrado de Firestore para **Supabase/Postgres**. A tabela é `public.notifications` (colunas em `snake_case`); a leitura em tempo real usa **Supabase Realtime** (`postgres_changes`), não `onSnapshot`. As policies de acesso vivem em SQL (RLS), não em `firestore.rules`.
 
 Arquivos-fonte principais:
 
-- `services/notificationService.ts` — CRUD, assinatura em tempo real, faxina, expiração.
-- `pages/Notifications.tsx` — tela `/notifications`, ações por tipo, timers de expiração.
+- `services/notificationService.ts` — CRUD (via `supabase`), assinatura em tempo real, faxina, expiração.
+- `pages/Chat.tsx` / `pages/Notifications.tsx` — inbox unificado, ações por tipo, timers de expiração.
 - `types.ts` — `NotificationType`, `Notification`, `NotificationStats`.
-- `firestore.rules` — coleção `notifications` (bloco `---- NOTIFICATIONS ----`).
+- `supabase/migrations/20260709_notifications_rls_realtime.sql` — RLS (select/insert/update/delete) + realtime da tabela `notifications`.
 
 ---
 
@@ -86,34 +88,32 @@ Observações de precisão:
 
 ## Modelo em tempo real: `subscribeUserNotifications`
 
-A tela `/notifications` não faz polling. Ela assina um `onSnapshot` filtrado por `toUserId` e recebe atualizações contínuas (`services/notificationService.ts:12-28`):
+A tela não faz polling. Faz uma **carga inicial** (`getUserNotifications`, filtrada por `to_user_id`) e assina um canal **Supabase Realtime** (`postgres_changes`) filtrado por `to_user_id=eq.<uid>`; a cada `INSERT/UPDATE/DELETE` recarrega a lista (`services/notificationService.ts:51-75`):
 
 ```ts
 subscribeUserNotifications: (userId, callback) => {
-  const q = query(collection(db, 'notifications'), where('toUserId', '==', userId));
-  return onSnapshot(q, (snap) => {
-    const now = new Date();
-    const active = [];
-    snap.docs.forEach(d => {
-      const n = d.data();
-      if (n.expiresAt && new Date(n.expiresAt) <= now) {
-        deleteDoc(doc(db, 'notifications', n.id)).catch(() => {}); // FAXINA
-      } else {
-        active.push(n);
-      }
-    });
-    active.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    callback(active);
-  }, () => callback([])); // handler de erro → lista vazia
+  const loadInitial = async () => callback(await getUserNotifications(userId)); // carga + faxina de expiradas
+  loadInitial();
+
+  const channel = supabase
+    .channel(`notifications:${userId}`)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'notifications',
+      filter: `to_user_id=eq.${userId}`,
+    }, () => loadInitial())      // qualquer mudança -> recarrega tudo
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); }; // unsubscribe
 };
 ```
 
 Pontos-chave:
 
-- **Faxina embutida**: a cada snapshot, qualquer doc com `expiresAt <= agora` é **excluído do Firestore** (`deleteDoc`), não apenas ocultado. A exclusão é _fire-and-forget_ (`.catch(() => {})`) — falha silenciosa não trava o callback. É essa faxina que dá vida ao contrato `expiresAt -> auto-exclusão`; não há Cloud Function agendada.
-- **Ordenação no cliente**: por `createdAt` decrescente (mais recentes primeiro). Não há `orderBy` no query — a ordenação acontece em memória após filtrar.
-- **Retorno = unsubscribe**: a função devolve o próprio unsubscribe do `onSnapshot`. `pages/Notifications.tsx:52-53` chama e limpa no cleanup do `useEffect`.
-- **Erro → lista vazia**: o segundo argumento do `onSnapshot` (`() => callback([])`) garante que uma falha de permissão/rede resulte em UI vazia, não em travamento.
+- **Realtime exige a tabela na publicação `supabase_realtime`** — garantido pela migração `20260709_notifications_rls_realtime.sql`. Sem isso, a notificação só apareceria após um reload (a carga inicial ainda funciona, mas não há entrega ao vivo).
+- **Realtime respeita a RLS**: o assinante só recebe linhas que sua policy de `select` permite (`to_user_id = auth.uid()`), alinhado ao `filter` do canal.
+- **Faxina embutida** em `getUserNotifications`: qualquer linha com `expiresAt <= agora` é **apagada** (`delete`, _fire-and-forget_) e omitida do retorno. É isso que concretiza o contrato `expiresAt -> auto-exclusão`; não há job server-side.
+- **Ordenação no servidor**: `order('created_at', { ascending: false })` na carga inicial.
+- **Retorno = unsubscribe**: a função devolve um cleanup que remove o canal; `Chat.tsx`/`Notifications.tsx` limpam no `useEffect`.
 
 ### Ciclo de vida (assinatura + faxina)
 
@@ -121,13 +121,13 @@ Pontos-chave:
 sequenceDiagram
     participant UI as Notifications.tsx
     participant Svc as subscribeUserNotifications
-    participant FS as Firestore (notifications)
+    participant FS as Supabase (notifications)
     UI->>Svc: subscribe(user.id, setNotifications)
-    Svc->>FS: onSnapshot(where toUserId == user.id)
-    FS-->>Svc: snapshot (docs)
-    loop cada doc
+    Svc->>FS: carga inicial (select where to_user_id == user.id) + canal Realtime
+    FS-->>Svc: linhas (rows)
+    loop cada linha
         alt expiresAt <= agora
-            Svc->>FS: deleteDoc(id)  %% faxina (fire-and-forget)
+            Svc->>FS: delete(id)  %% faxina (fire-and-forget)
         else ainda ativa
             Svc-->>Svc: push em active[]
         end
@@ -150,49 +150,46 @@ A UI também tem um guard redundante: `isExpired` filtra visualmente qualquer ca
 
 ## Criação: `createNotification`
 
-`services/notificationService.ts:30-57`. Faz duas coisas: grava o documento e, para três tipos, incrementa o contador vitalício.
+`services/notificationService.ts:77-106`. Faz duas coisas: grava a linha (via `mapToDb`, que já **omite campos `undefined`**) e, para três tipos, incrementa o contador vitalício no perfil do destinatário.
 
 ```ts
 createNotification: async (notification) => {
-  // 1) Remove campos undefined — o Firestore rejeita o doc inteiro se houver undefined.
-  const clean = Object.fromEntries(
-    Object.entries(notification).filter(([, v]) => v !== undefined)
-  );
-  await setDoc(doc(db, 'notifications', notification.id), clean);
+  const { error } = await supabase.from('notifications').upsert(mapToDb(notification));
+  if (error) { console.error('createNotification insert error:', error); return false; } // <- falha detectável
 
-  // 2) Incremento vitalício só para 3 tipos
-  const userRef = doc(db, 'users', notification.toUserId);
-  let statField = '';
-  if (notification.type === 'RENTAL_INTEREST') statField = 'notificationStats.rentalInterest';
-  else if (notification.type === 'SALE_INTEREST') statField = 'notificationStats.saleInterest';
-  else if (notification.type === 'STOLEN_FOUND') statField = 'notificationStats.stolenAlerts';
-  if (statField) {
-    await updateDoc(userRef, { [statField]: increment(1) });
-  }
-  return true; // false em caso de exceção (log no console)
+  // Incremento vitalício só para 3 tipos (RENTAL_INTEREST/SALE_INTEREST/STOLEN_FOUND).
+  // Escrita cruzada em users/{toUserId} — não bloqueia a entrega se falhar.
+  // ...select notification_stats + update...
+  return true;
 };
 ```
 
 Detalhes que importam:
 
-- **Limpeza de `undefined`**: `fromUserPhone` (e outros opcionais) pode vir `undefined` quando o remetente não preencheu o telefone. Sem a filtragem, o `setDoc` falharia e a notificação nunca seria criada. Por isso o objeto passa por `Object.entries(...).filter(v !== undefined)` antes de gravar.
-- **Incremento é escrita cruzada**: o `updateDoc` incide sobre `users/{toUserId}` — um documento de **outro** usuário. As Firestore rules liberam isso porque `notificationStats` está na allowlist de escritas cruzadas (`hasOnly(['connections','notificationStats','transactionHistory','referralCount'])`, `firestore.rules:42-44`). Ver [Segurança](#segurança-e-privacidade).
-- **Uso do valor de retorno**: os disparos existentes (Rentals, Sales, SerialCheck, Network, useInventory, contractService) não checam o `boolean` retornado — a criação é otimista. Na aceitação de conexão/transferência, a remoção da notificação de origem é conduzida pelo `onSnapshot` após o `deleteDoc` (fonte única da verdade; ver `Notifications.tsx:89` e `:123`).
+- **Retorno é confiável e tratado em todos os disparos do cliente**: `createNotification` retorna `false` quando o `insert` falha (ex.: RLS negando, rede). Os disparos **checam o retorno** e mostram "Não foi possível enviar" (sem falsos positivos), fechando o bug histórico de "enviei e o dono não recebeu" passar despercebido (o erro era engolido no console):
+  - `pages/Rentals.tsx` / `pages/Sales.tsx` (interesse): em falha **não gastam** a cota mensal (`incrementUsage`); em sucesso confirmam "Interesse enviado!".
+  - `hooks/useInventory.ts` (transferência): em falha **não** marca o item como `TRANSFER_PENDING` — senão o item ficaria travado sem o destinatário saber.
+  - `services/contractService.ts:sendOverdueNotice` (aviso de atraso): em falha **não** grava `overdue_notice_at` (não inicia o prazo de 48h); `pages/Contracts.tsx` exibe o erro.
+  - `pages/Network.tsx` / `pages/Chat.tsx` (convite/re-convite de conexão) e `pages/SerialCheck.tsx` (alerta de item roubado): mostram sucesso/erro no modal.
+  - Best-effort (a ação principal já valeu, a notificação é cortesia): `CONNECTION_ACCEPTED` (o vínculo já foi criado) e a notificação dentro de `raisePublicAlert` (o alerta público já foi registrado).
+- **RLS de INSERT é obrigatória**: a gravação só passa se a policy `notifications_insert_sender` (`from_user_id = auth.uid()`) existir — ver [Segurança](#segurança-e-privacidade) e a migração `20260709_notifications_rls_realtime.sql`.
+- **Limpeza de `undefined`**: `mapToDb` só inclui os opcionais quando definidos (`from_user_phone`, `from_user_avatar`, etc.), evitando gravar `null` desnecessário.
+- **Incremento é escrita cruzada**: o `update` incide sobre `users/{toUserId}` (outro usuário). É sequencial e **não-transacional**: se falhar, a notificação já foi criada — a entrega não depende dele.
 
 ---
 
 ## Operações do serviço
 
-`services/notificationService.ts`. Todas as cinco re-exportadas pelo facade em `services/storage.ts` (`createNotification`, `getUserNotifications`, `markNotificationAsRead`, `deleteNotification`, `scheduleNotificationExpiry`).
+`services/notificationService.ts` expõe: `createNotification`, `getUserNotifications`, `markNotificationAsRead`, `deleteNotification`, `scheduleNotificationExpiry` (todas via cliente `supabase`).
 
 | Função | Linha | O que faz |
 |---|---|---|
 | `subscribeUserNotifications(userId, cb)` | 12-28 | Assina em tempo real + faxina + ordena. Retorna unsubscribe. |
 | `createNotification(notification)` | 30-57 | Grava (limpando `undefined`) e incrementa `notificationStats` p/ 3 tipos. |
 | `getUserNotifications(userId)` | 59-73 | Leitura pontual (one-shot): filtra expiradas **em memória** (não deleta) e ordena desc. Usada em `pages/Home.tsx:24` para o resumo da home. |
-| `markNotificationAsRead(id)` | 75-80 | `updateDoc { read: true }`. |
-| `deleteNotification(id)` | 82-90 | `deleteDoc`. |
-| `scheduleNotificationExpiry(id)` | 92-101 | `updateDoc { read: true, expiresAt: agora + 24h }` — marca lida e agenda auto-exclusão. |
+| `markNotificationAsRead(id)` | 130-135 | `update { read: true }`. |
+| `deleteNotification(id)` | 137-145 | `delete` da linha. |
+| `scheduleNotificationExpiry(id)` | 147-156 | `update { read: true, expires_at: agora + 24h }` — marca lida e agenda auto-exclusão. |
 
 Diferença importante entre os dois "listadores": `subscribeUserNotifications` **exclui** as expiradas (faxina real); `getUserNotifications` apenas **as filtra** da resposta sem apagar (`:64-70`).
 
@@ -206,7 +203,7 @@ Ao clicar em um card, `handleNotificationClick` (`Notifications.tsx:56-61`) cham
 
 ### `scheduleNotificationExpiry` (24h)
 
-Helper que marca a notificação como lida **e** define `expiresAt = agora + 24h`, delegando a exclusão futura à faxina do `subscribe`. Está definida e re-exportada em `services/storage.ts:73`, porém **não há chamador no código atual** — é um utilitário disponível, ainda não conectado a nenhuma ação de UI. Registrado aqui por honestidade de rastreabilidade.
+Helper que marca a notificação como lida **e** define `expires_at = agora + 24h`, delegando a exclusão futura à faxina do `subscribe`. Está definida em `services/notificationService.ts`, porém **não há chamador no código atual** — é um utilitário disponível, ainda não conectado a nenhuma ação de UI. Registrado aqui por honestidade de rastreabilidade.
 
 ---
 
@@ -226,22 +223,28 @@ Fluxos de aceite completos estão em [network-and-transfers.md](./network-and-tr
 
 ## Segurança e privacidade
 
-Bloco `---- NOTIFICATIONS ----` em `firestore.rules:82-86`:
+RLS da tabela `public.notifications` (SQL em `supabase/migrations/20260709_notifications_rls_realtime.sql`):
 
+```sql
+-- select / update / delete: só o destinatário
+create policy notifications_select_recipient on public.notifications
+  for select using (to_user_id = auth.uid());
+create policy notifications_update_recipient on public.notifications
+  for update using (to_user_id = auth.uid()) with check (to_user_id = auth.uid());
+create policy notifications_delete_recipient on public.notifications
+  for delete using (to_user_id = auth.uid());
+-- insert: remetente assinado (impede forjar em nome de terceiro)
+create policy notifications_insert_sender on public.notifications
+  for insert with check (from_user_id = auth.uid());
 ```
-match /notifications/{notifId} {
-  allow read:          if isSignedIn() && resource.data.toUserId == request.auth.uid;
-  allow create:        if isSignedIn() && request.resource.data.fromUserId == request.auth.uid;
-  allow update, delete: if isSignedIn() && resource.data.toUserId == request.auth.uid;
-}
-```
 
-- **Leitura estritamente do destinatário**: ninguém além de `toUserId` lê a notificação. O query do `subscribe` filtra por `toUserId == uid`, alinhado à regra.
-- **Criação assinada**: quem cria precisa gravar o próprio uid em `fromUserId` (não dá para forjar remetente).
-- **Gerência só do destinatário**: `update` (marcar lida) e `delete` (excluir/faxina) exigem ser o `toUserId`. Isso significa que a **faxina no `subscribe` só apaga o que é do próprio usuário** — coerente, já que ele só assina as próprias notificações.
-- **Escrita cruzada de `notificationStats`**: o incremento em `createNotification` grava no perfil do destinatário. Permitido pela regra de `users` que restringe escritas de terceiros a `hasOnly(['connections','notificationStats','transactionHistory','referralCount'])` (`firestore.rules:42-44`) — defesa por-campo contra escalonamento de privilégio.
+- **Leitura estritamente do destinatário**: ninguém além de `to_user_id` lê a linha. O filtro do canal Realtime (`to_user_id=eq.<uid>`) e o `getUserNotifications` batem com a policy de `select`.
+- **Criação assinada**: quem cria precisa gravar o próprio uid em `from_user_id` (não dá para forjar remetente). **Esta policy é o que faltava** e causava o bug de notificações não entregues — sem ela, com RLS ligada, todo `insert` do cliente é negado por _default deny_.
+- **Gerência só do destinatário**: `update` (marcar lida) e `delete` (faxina/aceite) exigem ser o `to_user_id`.
+- **Inserts de servidor**: as funções `SECURITY DEFINER` de sorteio (`participar_sorteio`, `ensure_participation_reminder`, `resetar_participacoes_sorteio`) inserem notificações **ignorando a RLS** — por isso os lembretes de sorteio funcionavam mesmo com a policy de `insert` ausente.
+- **Escrita cruzada de `notification_stats`**: o incremento em `createNotification` grava em `users/{toUserId}` (outro usuário). Depende da policy de `update` de `users` liberar esse conjunto de campos; se falhar, **não** bloqueia a entrega (a notificação já foi inserida).
 
-Limitação registrada: as validações de negócio (quem pode disparar qual tipo, limites de uso) rodam no **cliente**; as rules fazem defesa por-campo, mas mover a lógica sensível para Cloud Functions segue como pendência documentada em [FIREBASE_RULES.md](../../FIREBASE_RULES.md). Ver também [04-security.md](../04-security.md).
+Limitação registrada: as validações de negócio (quem pode disparar qual tipo, limites de uso) rodam no **cliente**; a RLS faz a defesa de posse/privacidade. Ver [04-security.md](../04-security.md).
 
 ---
 
@@ -251,14 +254,14 @@ Limitação registrada: as validações de negócio (quem pode disparar qual tip
 flowchart TD
     A[Disparo: Rentals / Sales / SerialCheck / Network / useInventory / contractService] --> B[createNotification]
     B --> C{limpa undefined}
-    C --> D[setDoc em notifications/id]
+    C --> D[upsert em notifications]
     D --> E{type ∈ RENTAL_INTEREST / SALE_INTEREST / STOLEN_FOUND?}
     E -- sim --> F[increment notificationStats no perfil do destinatário]
     E -- não --> G[sem incremento]
-    F --> H[onSnapshot entrega ao destinatário]
+    F --> H[Realtime entrega ao destinatário]
     G --> H
     H --> I{expiresAt <= agora?}
-    I -- sim --> J[deleteDoc: faxina]
+    I -- sim --> J[delete: faxina]
     I -- não --> K[card renderizado]
     K --> L[clique: markNotificationAsRead]
     K --> M[ação: aceitar → deleteNotification]
@@ -271,9 +274,9 @@ flowchart TD
 
 - **Sem push real**: notificações só aparecem quando a tela está montada e assinando (`/notifications`) ou no carregamento pontual da Home (`getUserNotifications`). Não há Service Worker push nem badge no ícone do PWA.
 - **Sem paginação**: o query traz **todas** as notificações do usuário (filtro apenas por `toUserId`), ordenadas em memória. Para volumes altos isso cresce sem limite.
-- **Faxina oportunística**: a exclusão de expiradas depende de o destinatário abrir a tela e disparar um snapshot. Enquanto ele não abre, o doc expirado permanece no Firestore (apenas oculto na leitura pontual). Não há job de limpeza server-side.
+- **Faxina oportunística**: a exclusão de expiradas depende de o destinatário abrir a tela e disparar uma carga. Enquanto ele não abre, a linha expirada permanece na tabela (apenas oculta na leitura pontual). Não há job de limpeza server-side.
 - **`scheduleNotificationExpiry` sem chamador**: existe e está exportada, mas nenhuma ação de UI a invoca hoje.
-- **Incremento não-transacional**: `createNotification` grava a notificação e incrementa o stat em duas escritas sequenciais separadas; uma falha no `updateDoc` deixa a notificação criada sem o stat correspondente (o `catch` retorna `false` mas os disparos não tratam o retorno).
+- **Incremento não-transacional**: `createNotification` grava a notificação e incrementa o stat em duas escritas sequenciais separadas; uma falha no `update` do stat deixa a notificação criada sem o stat correspondente (não bloqueia a entrega).
 
 ---
 
@@ -282,7 +285,7 @@ flowchart TD
 - `services/notificationService.ts` — serviço completo (subscribe/faxina, create, read, markAsRead, delete, scheduleExpiry).
 - `pages/Notifications.tsx` — tela `/notifications`, ações por tipo, `NotificationTimer`, `Countdown`.
 - `types.ts` — `NotificationType` (`:102-109`), `Notification` (`:111-133`), `NotificationStats` (`:66-70`).
-- `firestore.rules` — bloco `notifications` (`:82-86`) e escrita cruzada de `notificationStats` em `users` (`:42-44`).
+- `supabase/migrations/20260709_notifications_rls_realtime.sql` — RLS (select/insert/update/delete) e realtime da tabela `notifications`.
 - `pages/Rentals.tsx:116-117` — disparo `RENTAL_INTEREST`.
 - `pages/Sales.tsx:112-113` — disparo `SALE_INTEREST`.
 - `pages/SerialCheck.tsx:55-56` — disparo `STOLEN_FOUND`.

@@ -36,6 +36,7 @@ export const Contracts: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState<{ title: string; message: string; confirmLabel: string; isDestructive?: boolean; action: () => Promise<void> }>({ title: '', message: '', confirmLabel: '', action: async () => {} });
+  const [feedback, setFeedback] = useState<{ title: string; message: string } | null>(null);
   const { ad } = useAd();
 
   useEffect(() => {
@@ -71,8 +72,14 @@ export const Contracts: React.FC = () => {
   const onDecline = (c: Contract) => ask('Recusar contrato', `Recusar a proposta de "${c.equipmentName}"?`, 'Recusar', async () => { await contractService.closeContract(c, 'declined'); }, true);
   const onCancel = (c: Contract) => ask('Cancelar contrato', `Cancelar sua proposta de "${c.equipmentName}"?`, 'Cancelar proposta', async () => { await contractService.closeContract(c, 'cancelled'); }, true);
   const onComplete = (c: Contract) => ask('Concluir aluguel', `Marcar o aluguel de "${c.equipmentName}" como devolvido/concluído?`, 'Concluir', async () => { await contractService.completeRental(c); });
-  const onNotifyOverdue = (c: Contract) => ask('Notificar atraso', `Avisar ${c.counterpartyName} de que "${c.equipmentName}" está atrasado? Ele terá um prazo (48h) para resolver antes de qualquer alerta público.`, 'Notificar', async () => { await contractService.sendOverdueNotice(c, user); });
-  const onPublicAlert = (c: Contract) => ask('Emitir alerta público', `Isto torna PÚBLICO à comunidade que ${c.counterpartyName} não devolveu "${c.equipmentName}". É uma ação séria, visível a todos, e fica no perfil dele até a devolução. Confirmar?`, 'Emitir alerta', async () => { await contractService.raisePublicAlert(c, user); }, true);
+  const onNotifyOverdue = (c: Contract) => ask('Notificar atraso', `Avisar ${c.counterpartyName} de que "${c.equipmentName}" está atrasado? Ele terá um prazo (48h) para resolver antes de qualquer alerta público.`, 'Notificar', async () => {
+    const ok = await contractService.sendOverdueNotice(c, user);
+    if (!ok) setFeedback({ title: 'Não foi possível notificar', message: `O aviso de atraso para ${c.counterpartyName} não foi enviado, então o prazo de 48h não começou. Tente novamente em instantes.` });
+  });
+  const onPublicAlert = (c: Contract) => ask('Emitir alerta público', `Isto torna PÚBLICO à comunidade que ${c.counterpartyName} não devolveu "${c.equipmentName}". É uma ação séria, visível a todos, e fica no perfil dele até a devolução. Confirmar?`, 'Emitir alerta', async () => {
+    const ok = await contractService.raisePublicAlert(c, user);
+    if (!ok) setFeedback({ title: 'Não foi possível emitir', message: `O alerta público de "${c.equipmentName}" não foi registrado. Tente novamente em instantes.` });
+  }, true);
 
   const pendingForMe = contracts.filter(c => c.status === 'proposed' && !iAmOwner(c));
   const sentByMe = contracts.filter(c => c.status === 'proposed' && iAmOwner(c));
@@ -153,6 +160,7 @@ export const Contracts: React.FC = () => {
   return (
     <div className="space-y-8 pb-12">
       <ConfirmModal isOpen={modalOpen} title={modalConfig.title} message={modalConfig.message} onConfirm={runModal} onCancel={() => setModalOpen(false)} isProcessing={processing} confirmLabel={modalConfig.confirmLabel} isDestructive={modalConfig.isDestructive} />
+      <ConfirmModal isOpen={!!feedback} title={feedback?.title || ''} message={feedback?.message || ''} onConfirm={() => setFeedback(null)} onCancel={() => setFeedback(null)} confirmLabel="Fechar" isDestructive />
 
       <header>
         <h1 className="text-3xl font-bold text-white flex items-center gap-3"><Icons.FileText className="w-8 h-8 text-accent-primary" /> Contratos</h1>
