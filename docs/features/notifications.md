@@ -154,7 +154,7 @@ A UI também tem um guard redundante: `isExpired` filtra visualmente qualquer ca
 
 ```ts
 createNotification: async (notification) => {
-  const { error } = await supabase.from('notifications').upsert(mapToDb(notification));
+  const { error } = await supabase.from('notifications').insert(mapToDb(notification));
   if (error) { console.error('createNotification insert error:', error); return false; } // <- falha detectável
 
   // Incremento vitalício só para 3 tipos (RENTAL_INTEREST/SALE_INTEREST/STOLEN_FOUND).
@@ -172,6 +172,7 @@ Detalhes que importam:
   - `services/contractService.ts:sendOverdueNotice` (aviso de atraso): em falha **não** grava `overdue_notice_at` (não inicia o prazo de 48h); `pages/Contracts.tsx` exibe o erro.
   - `pages/Network.tsx` / `pages/Chat.tsx` (convite/re-convite de conexão) e `pages/SerialCheck.tsx` (alerta de item roubado): mostram sucesso/erro no modal.
   - Best-effort (a ação principal já valeu, a notificação é cortesia): `CONNECTION_ACCEPTED` (o vínculo já foi criado) e a notificação dentro de `raisePublicAlert` (o alerta público já foi registrado).
+- **Usa `insert()`, NUNCA `upsert()`** (armadilha de RLS): o `id` é sempre um UUID novo, então não há conflito a resolver. Se fosse `upsert()`, o PostgREST geraria `INSERT ... ON CONFLICT DO UPDATE`, e o Postgres passaria a exigir **também** a policy de UPDATE (`with check to_user_id = auth.uid()`). Como a notificação é endereçada a **outro** usuário (o dono do item), essa checagem falha e a RLS nega com **403 / `42501`** — mesmo com a policy de INSERT correta. Foi exatamente esse o segundo bloqueio do bug "enviei e o dono não recebeu". Com `insert()`, só a policy de INSERT (`from_user_id = auth.uid()`) é avaliada.
 - **RLS de INSERT é obrigatória**: a gravação só passa se a policy `notifications_insert_sender` (`from_user_id = auth.uid()`) existir — ver [Segurança](#segurança-e-privacidade) e a migração `20260709_notifications_rls_realtime.sql`.
 - **Limpeza de `undefined`**: `mapToDb` só inclui os opcionais quando definidos (`from_user_phone`, `from_user_avatar`, etc.), evitando gravar `null` desnecessário.
 - **Incremento é escrita cruzada**: o `update` incide sobre `users/{toUserId}` (outro usuário). É sequencial e **não-transacional**: se falhar, a notificação já foi criada — a entrega não depende dele.
@@ -254,7 +255,7 @@ Limitação registrada: as validações de negócio (quem pode disparar qual tip
 flowchart TD
     A[Disparo: Rentals / Sales / SerialCheck / Network / useInventory / contractService] --> B[createNotification]
     B --> C{limpa undefined}
-    C --> D[upsert em notifications]
+    C --> D[insert em notifications]
     D --> E{type ∈ RENTAL_INTEREST / SALE_INTEREST / STOLEN_FOUND?}
     E -- sim --> F[increment notificationStats no perfil do destinatário]
     E -- não --> G[sem incremento]

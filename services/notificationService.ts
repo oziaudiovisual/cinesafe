@@ -77,7 +77,13 @@ export const notificationService = {
   createNotification: async (notification: Notification) => {
     try {
         const dbNotif = mapToDb(notification);
-        const { error } = await supabase.from('notifications').upsert(dbNotif);
+        // IMPORTANTE: usar insert(), não upsert(). O id é sempre um UUID novo, então
+        // não há conflito real — mas o upsert vira "INSERT ... ON CONFLICT DO UPDATE",
+        // o que faz o Postgres exigir também a policy de UPDATE
+        // (with check to_user_id = auth.uid()). Como a notificação é endereçada a
+        // OUTRO usuário (o dono do item), essa checagem falha e a RLS nega (403/42501).
+        // Com insert() só a policy de INSERT (from_user_id = auth.uid()) é avaliada.
+        const { error } = await supabase.from('notifications').insert(dbNotif);
         if (error) { console.error('createNotification insert error:', error); return false; }
 
         // Incrementar stats do usuário
