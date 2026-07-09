@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { User, Notification } from '../types';
 import { Icons } from '../components/Icons';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { formatCompactCurrency } from '../utils/formatters';
 import { AdBanner } from '../components/AdBanner';
 import { useAd } from '../hooks/useAd';
 
@@ -169,7 +170,7 @@ export const Network: React.FC = () => {
                                         {user && user.transactionHistory && user.transactionHistory[conn.id] > 0 && (
                                             <div className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-green-400 bg-green-900/30 px-2 py-0.5 rounded-md w-fit border border-green-500/20">
                                                 <Icons.Banknote className="w-3 h-3" />
-                                                <span>R$ {user.transactionHistory[conn.id].toLocaleString('pt-BR', { notation: 'compact' })} transacionados</span>
+                                                <span>{formatCompactCurrency(user.transactionHistory[conn.id])} transacionados</span>
                                             </div>
                                         )}
                                     </div>

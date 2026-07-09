@@ -8,6 +8,7 @@ import { Icons } from '../components/Icons';
 import { IBGEService } from '../services/ibge';
 import { useAuth } from '../context/AuthContext';
 import { ReferralModal } from '../components/ReferralModal';
+import { formatCurrency } from '../utils/formatters';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UserAvatar } from '../components/UserAvatar';
 
@@ -178,7 +179,7 @@ export const Sales: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="absolute top-4 right-4 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
-                                    R$ {item.salePrice?.toLocaleString('pt-BR')}
+                                    {formatCurrency(item.salePrice ?? 0)}
                                 </div>
                                 {item.invoiceUrl && (
                                     <div className="absolute top-4 left-4 bg-blue-500/90 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg flex items-center gap-1 border border-blue-400/50">

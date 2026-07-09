@@ -8,6 +8,7 @@ import { Icons } from '../components/Icons';
 import { IBGEService } from '../services/ibge';
 import { useAuth } from '../context/AuthContext';
 import { ReferralModal } from '../components/ReferralModal';
+import { formatCurrency } from '../utils/formatters';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UserAvatar } from '../components/UserAvatar';
 
@@ -188,7 +189,7 @@ export const Rentals: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="absolute top-4 right-4 bg-accent-secondary text-brand-950 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
-                                    R$ {item.rentalPricePerDay?.toLocaleString('pt-BR')}/dia
+                                    {formatCurrency(item.rentalPricePerDay ?? 0)}/dia
                                 </div>
                             </div>
                             

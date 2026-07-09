@@ -334,6 +334,8 @@ toTitleCase('sony a7')      // "Sony A7"
 
 `formatDate` retorna `''` para entrada vazia. Alguns componentes formatam inline com a mesma locale/opções (ex.: `components/ContractModal.tsx:58`); o padrão canônico continua sendo `utils/formatters.ts`.
 
+> **Exibição de preço sempre via helper.** Todo valor monetário renderizado passa por `formatCurrency` (ou `formatCompactCurrency` em badges) — nunca `toLocaleString('pt-BR')` cru, que mostra o milhar mas **descarta os centavos** ("R$ 16.900" em vez de "R$ 16.900,00"). Os cards de vitrine (`Sales`, `Rentals`, `Landing`) e o badge "transacionados" (`Network`) foram padronizados nesse formato; preços de anúncio usam `formatAdPrice` (§ acima).
+
 ### Entrada de moeda — máscara única (`CurrencyInput` + `utils/formatters.ts`)
 
 Todo campo em que o usuário **digita** um preço/valor usa a mesma máscara: **ponto separa milhar, vírgula separa centavos** (`"16.900,00"`). A máscara é do tipo **"centavos"** — cada dígito digitado é um centavo, então o valor cresce da direita para a esquerda (digitar `1690000` → `16.900,00`).

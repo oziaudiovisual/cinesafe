@@ -4,6 +4,7 @@ import { equipmentService } from '../services/equipmentService';
 import { Equipment, EquipmentCategory } from '../types';
 import { Icons } from '../components/Icons';
 import { CineSafeLogo } from '../components/CineSafeLogo';
+import { formatCurrency } from '../utils/formatters';
 
 // Página pública (aberta a qualquer visitante). A pessoa pode navegar pela
 // vitrine, mas qualquer AÇÃO (ver detalhes, ter interesse, anunciar, verificar
@@ -193,12 +194,12 @@ export const Landing: React.FC = () => {
                       <div className="absolute top-4 right-4 flex flex-col gap-1.5 items-end">
                         {item.isForRent && (
                           <span className="bg-accent-primary text-brand-950 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
-                            R$ {item.rentalPricePerDay?.toLocaleString('pt-BR')}/dia
+                            {formatCurrency(item.rentalPricePerDay ?? 0)}/dia
                           </span>
                         )}
                         {item.isForSale && (
                           <span className="bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg">
-                            R$ {item.salePrice?.toLocaleString('pt-BR')}
+                            {formatCurrency(item.salePrice ?? 0)}
                           </span>
                         )}
                       </div>
