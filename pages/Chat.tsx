@@ -108,7 +108,19 @@ export const Chat: React.FC = () => {
 
   const handleInAppChat = async (notif: Notification) => {
     if (!user) return;
-    const chatId = await chatService.openChat(user, { id: notif.fromUserId, name: notif.fromUserName, avatarUrl: notif.fromUserAvatar || '' });
+    const other = { id: notif.fromUserId, name: notif.fromUserName, avatarUrl: notif.fromUserAvatar || '' };
+    const chatId = await chatService.openChat(user, other);
+    // Adiciona a conversa ao estado local na hora (a lista só recarrega via realtime;
+    // sem isto, clicar em "Conversar" deixava o painel em "Conversa não encontrada").
+    setChats(prev => prev.some(c => c.id === chatId) ? prev : [{
+      id: chatId,
+      participants: [user.id, other.id],
+      participantInfo: {
+        [user.id]: { name: user.name || 'Você', avatarUrl: user.avatarUrl || '' },
+        [other.id]: { name: other.name || 'Contato', avatarUrl: other.avatarUrl || '' },
+      },
+      lastMessage: '', lastMessageAt: new Date().toISOString(), lastSenderId: '',
+    }, ...prev]);
     setSelectedId(chatId);
   };
 

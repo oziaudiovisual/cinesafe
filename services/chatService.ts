@@ -35,7 +35,7 @@ export const chatService = {
     
     if (!existing) {
       const now = new Date().toISOString();
-      await supabase.from('chats').insert({
+      const { error } = await supabase.from('chats').insert({
         id,
         participants: [me.id, other.id],
         participant_info: {
@@ -46,6 +46,7 @@ export const chatService = {
         last_message_at: now,
         unread_count: {},
       });
+      if (error) console.error('openChat insert error:', error);
     }
     return id;
   },

@@ -79,6 +79,14 @@ Pontos relevantes:
 - **Idempotência**: faz `getDoc` antes de escrever. Se o doc já existe, não sobrescreve
   nada — apenas retorna o id. Chamar `openChat` várias vezes é seguro e não reseta o
   histórico nem o `participantInfo`.
+- **Supabase (atual):** a implementação real usa `supabase.from('chats').select(...).maybeSingle()`
+  + `insert(...)` (não Firestore `getDoc`/`setDoc`). O `insert` **loga o erro** (`openChat insert error`)
+  quando a RLS de `chats` nega, para não falhar em silêncio.
+- **Abertura imediata no inbox (`pages/Chat.tsx:handleInAppChat`):** ao clicar em "Conversar"
+  numa notificação, além de `openChat`, a conversa é **adicionada ao estado local** (`setChats`)
+  na hora. Sem isso, como a lista só recarrega via realtime, o painel caía em "Conversa não
+  encontrada". Requer que a RLS de `chats`/`chat_messages` permita criar (`participante`) — ver
+  [Segurança](../04-security.md).
 - **Denormalização de `participantInfo`**: nome e avatar de cada participante são
   copiados para dentro do doc de chat. Assim a lista de conversas renderiza avatar +
   nome do "outro" sem precisar ler a coleção `users` (que exige autenticação e um
