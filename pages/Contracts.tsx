@@ -165,7 +165,7 @@ export const Contracts: React.FC = () => {
         <div className="glass-card p-12 rounded-[2.5rem] text-center border border-white/5">
           <Icons.FileText className="w-14 h-14 mx-auto mb-4 text-brand-700" />
           <p className="text-brand-300 font-bold mb-1">Nenhum contrato ainda.</p>
-          <p className="text-brand-500 text-sm">Abra uma conversa em Mensagens e clique em <span className="text-white font-bold">Fechar negócio</span> para propor um aluguel ou venda.</p>
+          <p className="text-brand-500 text-sm">Abra uma conversa em Mensagens e clique em <span className="text-white font-bold mx-1">Fechar negócio</span> para propor um aluguel ou venda.</p>
         </div>
       ) : (
         <div className="space-y-8">
